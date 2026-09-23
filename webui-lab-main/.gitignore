@@ -1,0 +1,20 @@
+# 依賴套件 —— 這個資料夾會有上萬個檔案，絕不能進git
+node_modules/
+
+# 建置產物
+dist/
+build/
+
+# 環境變數與密鑰
+.env
+.env.local
+.env.*.local
+
+# 編輯器與系統
+.vscode/
+.DS_Store
+Thumbs.db
+
+# 日誌
+*.log
+npm-debug.log*
