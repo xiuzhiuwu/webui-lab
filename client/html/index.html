@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en" class="dark h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StudyFlow - Task Manager & Pomodoro Timer</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js CDN for Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              400: '#818cf8',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#1e1b4b',
+            },
+            dark: {
+              bg: '#0b0f17',
+              card: '#151c28',
+              hover: '#1e293b',
+              border: '#2a364f',
+            }
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'glow': 'glow 2s ease-in-out infinite alternate',
+          },
+          keyframes: {
+            glow: {
+              '0%': { boxShadow: '0 0 15px rgba(99, 102, 241, 0.3)' },
+              '100%': { boxShadow: '0 0 30px rgba(99, 102, 241, 0.7)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="h-full flex flex-col bg-dark-bg text-gray-100 antialiased overflow-x-hidden selection:bg-brand-500 selection:text-white">
+
+  <!-- Top Navigation Header -->
+  <header class="border-b border-dark-border/80 bg-dark-bg/80 sticky top-0 z-30 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <!-- Logo & Title -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-brand-500/30">
+          <i class="fa-solid fa-graduation-cap"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold bg-gradient-to-r from-white via-indigo-100 to-indigo-400 bg-clip-text text-transparent">
+            StudyFlow
+          </h1>
+          <p class="text-xs text-gray-400 -mt-1 hidden sm:block">Productivity & Focus Hub</p>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="flex items-center space-x-1 sm:space-x-2 bg-dark-card p-1 rounded-xl border border-dark-border">
+        <button id="tab-timer-btn" onclick="switchTab('timer')" class="nav-tab active px-3 sm:px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 bg-brand-600 text-white shadow-md">
+          <i class="fa-solid fa-stopwatch text-xs"></i>
+          <span>Timer</span>
+        </button>
+        <button id="tab-tasks-btn" onclick="switchTab('tasks')" class="nav-tab px-3 sm:px-4 py-1.5 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-hover transition-all duration-200 flex items-center space-x-2">
+          <i class="fa-solid fa-list-check text-xs"></i>
+          <span>Tasks</span>
+          <span id="pending-count-badge" class="ml-1 px-1.5 py-0.5 text-[10px] bg-brand-500/20 text-brand-400 rounded-full font-semibold">0</span>
+        </button>
+        <button id="tab-analytics-btn" onclick="switchTab('analytics')" class="nav-tab px-3 sm:px-4 py-1.5 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-hover transition-all duration-200 flex items-center space-x-2">
+          <i class="fa-solid fa-chart-pie text-xs"></i>
+          <span>Analytics</span>
+        </button>
+      </nav>
+
+      <!-- Action Tools -->
+      <div class="flex items-center space-x-2 sm:space-x-3">
+        <!-- Ambient Sound Toggle Dropdown Trigger -->
+        <button onclick="toggleAmbientMenu()" id="ambient-btn" class="p-2 rounded-xl bg-dark-card border border-dark-border text-gray-400 hover:text-white hover:border-brand-500/50 transition-all relative" title="Ambient Sounds">
+          <i class="fa-solid fa-headphones text-base"></i>
+          <span id="ambient-indicator" class="hidden absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+        </button>
+
+        <!-- Focus Mode Fullscreen Button -->
+        <button onclick="enterFocusOverlay()" class="px-3 py-2 rounded-xl bg-dark-card border border-dark-border text-gray-300 hover:text-brand-400 hover:border-brand-500/50 text-sm font-medium transition-all flex items-center space-x-1.5 shadow-sm" title="Focus Mode">
+          <i class="fa-solid fa-expand text-xs"></i>
+          <span class="hidden md:inline">Focus Overlay</span>
+        </button>
+
+        <!-- Notification Switch -->
+        <button id="notif-btn" onclick="requestNotificationPermission()" class="p-2 rounded-xl bg-dark-card border border-dark-border text-gray-400 hover:text-amber-400 transition-all" title="Enable Desktop Notifications">
+          <i class="fa-regular fa-bell"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Ambient Sound Popover Menu -->
+  <div id="ambient-popover" class="hidden fixed top-16 right-4 sm:right-12 z-50 w-72 bg-dark-card border border-dark-border rounded-2xl shadow-2xl p-4 glass-effect">
+    <div class="flex items-center justify-between mb-3 border-b border-dark-border pb-2">
+      <h4 class="text-sm font-semibold flex items-center text-gray-200">
+        <i class="fa-solid fa-sliders text-brand-400 mr-2"></i> Ambient Generator
+      </h4>
+      <button onclick="toggleAmbientMenu()" class="text-gray-400 hover:text-white text-xs"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    
+    <div class="space-y-3">
+      <!-- Rain -->
+      <div class="flex items-center justify-between">
+        <span class="text-xs text-gray-300 flex items-center"><i class="fa-solid fa-cloud-showers-heavy text-blue-400 w-5"></i> Rain</span>
+        <div class="flex items-center space-x-2">
+          <input type="range" min="0" max="100" value="0" oninput="setAmbientVolume('rain', this.value)" class="w-24 accent-brand-500 h-1 bg-dark-hover rounded-lg cursor-pointer">
+          <span id="rain-vol-val" class="text-[10px] text-gray-400 w-6 text-right">Off</span>
+        </div>
+      </div>
+      <!-- White Noise -->
+      <div class="flex items-center justify-between">
+        <span class="text-xs text-gray-300 flex items-center"><i class="fa-solid fa-wind text-gray-400 w-5"></i> White Noise</span>
+        <div class="flex items-center space-x-2">
+          <input type="range" min="0" max="100" value="0" oninput="setAmbientVolume('whitenoise', this.value)" class="w-24 accent-brand-500 h-1 bg-dark-hover rounded-lg cursor-pointer">
+          <span id="whitenoise-vol-val" class="text-[10px] text-gray-400 w-6 text-right">Off</span>
+        </div>
+      </div>
+      <!-- Cafe Ambient -->
+      <div class="flex items-center justify-between">
+        <span class="text-xs text-gray-300 flex items-center"><i class="fa-solid fa-mug-hot text-amber-400 w-5"></i> Cafe Hum</span>
+        <div class="flex items-center space-x-2">
+          <input type="range" min="0" max="100" value="0" oninput="setAmbientVolume('cafe', this.value)" class="w-24 accent-brand-500 h-1 bg-dark-hover rounded-lg cursor-pointer">
+          <span id="cafe-vol-val" class="text-[10px] text-gray-400 w-6 text-right">Off</span>
+        </div>
+      </div>
+      <!-- Lo-Fi Drone Synth -->
+      <div class="flex items-center justify-between">
+        <span class="text-xs text-gray-300 flex items-center"><i class="fa-solid fa-wave-square text-purple-400 w-5"></i> Deep Synth</span>
+        <div class="flex items-center space-x-2">
+          <input type="range" min="0" max="100" value="0" oninput="setAmbientVolume('synth', this.value)" class="w-24 accent-brand-500 h-1 bg-dark-hover rounded-lg cursor-pointer">
+          <span id="synth-vol-val" class="text-[10px] text-gray-400 w-6 text-right">Off</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main View Area -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+    <!-- ==================== VIEW 1: POMODORO TIMER ==================== -->
+    <section id="view-timer" class="space-y-8 animate-fadeIn">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+        <!-- Timer Card Area -->
+        <div class="lg:col-span-7 bg-dark-card border border-dark-border rounded-3xl p-6 sm:p-10 shadow-2xl flex flex-col items-center justify-center relative overflow-hidden">
+          
+          <!-- Subtle glow background -->
+          <div id="timer-glow" class="absolute w-72 h-72 rounded-full bg-brand-600/10 filter blur-3xl pointer-events-none transition-all duration-700"></div>
+
+          <!-- Timer Modes selector -->
+          <div class="flex bg-dark-bg p-1.5 rounded-2xl border border-dark-border mb-8 z-10">
+            <button onclick="setTimerMode('focus')" id="mode-focus" class="timer-mode-btn active px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all bg-brand-600 text-white shadow">
+              <i class="fa-solid fa-fire mr-1.5 text-rose-400"></i>Focus (25m)
+            </button>
+            <button onclick="setTimerMode('shortBreak')" id="mode-shortBreak" class="timer-mode-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-gray-400 hover:text-white transition-all">
+              <i class="fa-solid fa-coffee mr-1.5 text-emerald-400"></i>Short Break (5m)
+            </button>
+            <button onclick="setTimerMode('longBreak')" id="mode-longBreak" class="timer-mode-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-gray-400 hover:text-white transition-all">
+              <i class="fa-solid fa-couch mr-1.5 text-indigo-400"></i>Long Break (15m)
+            </button>
+          </div>
+
+          <!-- Circular SVG Progress Timer -->
+          <div class="relative w-64 h-64 sm:w-80 sm:h-80 flex items-center justify-center my-2 z-10">
+            <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+              <!-- Circle Background Track -->
+              <circle cx="50" cy="50" r="44" stroke="currentColor" stroke-width="4" fill="none" class="text-dark-border" />
+              <!-- Animated Circle Progress Track -->
+              <circle id="timer-progress-circle" cx="50" cy="50" r="44" stroke="currentColor" stroke-width="4.5" fill="none"
+                stroke-dasharray="276.46" stroke-dashoffset="0" stroke-linecap="round"
+                class="text-brand-500 transition-all duration-1000 ease-linear" />
+            </svg>
+
+            <!-- Countdown Text Display inside Circle -->
+            <div class="absolute text-center flex flex-col items-center">
+              <span id="timer-display" class="font-mono text-5xl sm:text-6xl font-bold tracking-tight text-white drop-shadow-md">25:00</span>
+              <span id="timer-mode-label" class="text-xs uppercase tracking-widest text-brand-400 font-semibold mt-2">Focus Time</span>
+            </div>
+          </div>
+
+          <!-- Timer Controls -->
+          <div class="flex items-center space-x-4 mt-8 z-10">
+            <button id="timer-start-btn" onclick="toggleTimer()" class="w-36 py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white font-semibold shadow-lg shadow-brand-500/25 hover:opacity-95 active:scale-95 transition-all text-base flex items-center justify-center space-x-2">
+              <i id="timer-icon" class="fa-solid fa-play text-sm"></i>
+              <span id="timer-btn-text">Start</span>
+            </button>
+            <button onclick="resetTimer()" class="p-3.5 rounded-2xl bg-dark-bg border border-dark-border text-gray-400 hover:text-white hover:border-gray-600 active:scale-95 transition-all" title="Reset Timer">
+              <i class="fa-solid fa-rotate-left"></i>
+            </button>
+            <button onclick="skipTimer()" class="p-3.5 rounded-2xl bg-dark-bg border border-dark-border text-gray-400 hover:text-white hover:border-gray-600 active:scale-95 transition-all" title="Skip Session">
+              <i class="fa-solid fa-forward-step"></i>
+            </button>
+          </div>
+
+          <!-- Custom Duration Quick Settings Toggle -->
+          <div class="mt-8 pt-6 border-t border-dark-border/60 w-full flex items-center justify-between text-xs text-gray-400 z-10">
+            <span>Custom Durations (min):</span>
+            <div class="flex items-center space-x-2">
+              <input type="number" id="custom-focus" value="25" min="1" max="120" class="w-12 bg-dark-bg border border-dark-border rounded px-1.5 py-0.5 text-center text-white text-xs focus:border-brand-500 outline-none" onchange="updateCustomDurations()">
+              <span>/</span>
+              <input type="number" id="custom-short" value="5" min="1" max="60" class="w-12 bg-dark-bg border border-dark-border rounded px-1.5 py-0.5 text-center text-white text-xs focus:border-brand-500 outline-none" onchange="updateCustomDurations()">
+              <span>/</span>
+              <input type="number" id="custom-long" value="15" min="1" max="60" class="w-12 bg-dark-bg border border-dark-border rounded px-1.5 py-0.5 text-center text-white text-xs focus:border-brand-500 outline-none" onchange="updateCustomDurations()">
+            </div>
+          </div>
+        </div>
+
+        <!-- Active Focus Task Widget & Today Quick Summary -->
+        <div class="lg:col-span-5 space-y-6">
+
+          <!-- Current Active Task Selector / Card -->
+          <div class="bg-dark-card border border-dark-border rounded-3xl p-6 shadow-xl relative">
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-xs uppercase tracking-wider font-semibold text-brand-400 flex items-center">
+                <i class="fa-solid fa-bullseye text-rose-500 mr-2"></i> Current Target Task
+              </span>
+              <button onclick="switchTab('tasks')" class="text-xs text-gray-400 hover:text-brand-400 transition-all flex items-center">
+                <span>Select Task</span> <i class="fa-solid fa-chevron-right ml-1 text-[10px]"></i>
+              </button>
+            </div>
+
+            <div id="active-task-container" class="p-4 rounded-2xl bg-dark-bg/60 border border-dark-border/80 min-h-[100px] flex flex-col justify-center">
+              <!-- Rendered via JS -->
+              <div class="text-center text-gray-500 text-sm py-2">
+                <i class="fa-regular fa-square-check text-2xl mb-1 opacity-50"></i>
+                <p>No active focus task selected.</p>
+                <button onclick="switchTab('tasks')" class="text-brand-400 underline text-xs mt-1 hover:text-brand-300">Pick or create one from Tasks</button>
+              </div>
+            </div>
+
+            <!-- Increment Pomodoro Tracker for Target -->
+            <div class="mt-4 flex items-center justify-between text-xs text-gray-400 bg-dark-bg px-3 py-2 rounded-xl">
+              <span>Pomodoros for Target:</span>
+              <div id="target-pomodoro-counter" class="font-mono text-white flex items-center space-x-1">
+                <span>0</span> / <span>0</span> <span class="text-rose-500 ml-1">🍅</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Motivational Stats Bar -->
+          <div class="bg-dark-card border border-dark-border rounded-3xl p-6 shadow-xl grid grid-cols-2 gap-4">
+            <div class="bg-dark-bg p-4 rounded-2xl border border-dark-border/60">
+              <div class="text-gray-400 text-xs mb-1">Today's Focus Time</div>
+              <div id="today-focus-hours" class="text-2xl font-bold font-mono text-emerald-400">0.0 <span class="text-xs font-sans text-gray-400">hrs</span></div>
+            </div>
+            <div class="bg-dark-bg p-4 rounded-2xl border border-dark-border/60">
+              <div class="text-gray-400 text-xs mb-1">Pomodoros Finished</div>
+              <div id="today-pomo-count" class="text-2xl font-bold font-mono text-rose-400">0 <span class="text-xs font-sans text-gray-400">🍅</span></div>
+            </div>
+          </div>
+
+          <!-- Keyboard Shortcuts Cheat Sheet -->
+          <div class="bg-dark-card/60 border border-dark-border/50 rounded-2xl p-4 text-xs text-gray-400 space-y-2">
+            <div class="font-semibold text-gray-300 text-xs flex items-center">
+              <i class="fa-solid fa-keyboard mr-2 text-brand-400"></i> Quick Keyboard Controls
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-[11px]">
+              <div><kbd class="px-1.5 py-0.5 bg-dark-bg rounded border border-gray-700 text-white font-mono">Space</kbd> Start / Pause</div>
+              <div><kbd class="px-1.5 py-0.5 bg-dark-bg rounded border border-gray-700 text-white font-mono">N</kbd> Create New Task</div>
+              <div><kbd class="px-1.5 py-0.5 bg-dark-bg rounded border border-gray-700 text-white font-mono">R</kbd> Reset Timer</div>
+              <div><kbd class="px-1.5 py-0.5 bg-dark-bg rounded border border-gray-700 text-white font-mono">F</kbd> Focus Overlay</div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================== VIEW 2: DYNAMIC TASK MANAGER ==================== -->
+    <section id="view-tasks" class="hidden space-y-6 animate-fadeIn">
+      
+      <!-- Task Header Toolbar -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-dark-card border border-dark-border rounded-2xl p-4 shadow-lg">
+        <!-- Search & Filter Controls -->
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3 flex-1">
+          <!-- Search input -->
+          <div class="relative min-w-[200px] flex-1">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-500 text-xs"></i>
+            <input type="text" id="task-search-input" placeholder="Search tasks..." oninput="renderTasks()" class="w-full bg-dark-bg border border-dark-border rounded-xl pl-9 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500">
+          </div>
+
+          <!-- Category Filter -->
+          <select id="task-category-filter" onchange="renderTasks()" class="bg-dark-bg border border-dark-border rounded-xl px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-brand-500">
+            <option value="all">All Categories</option>
+            <option value="Study">📚 Study</option>
+            <option value="Work">💼 Work</option>
+            <option value="Life">🌿 Life</option>
+          </select>
+
+          <!-- Status / Active Filter -->
+          <select id="task-status-filter" onchange="renderTasks()" class="bg-dark-bg border border-dark-border rounded-xl px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-brand-500">
+            <option value="all">All Status</option>
+            <option value="active">Incomplete</option>
+            <option value="completed">Completed</option>
+          </select>
+        </div>
+
+        <!-- Right Side: View Switcher & Add Button -->
+        <div class="flex items-center space-x-3">
+          <!-- List / Kanban Switch -->
+          <div class="bg-dark-bg p-1 rounded-xl border border-dark-border flex items-center">
+            <button id="view-mode-list-btn" onclick="setTaskViewMode('list')" class="px-3 py-1 rounded-lg text-xs font-medium bg-brand-600 text-white shadow">
+              <i class="fa-solid fa-list mr-1"></i> List
+            </button>
+            <button id="view-mode-kanban-btn" onclick="setTaskViewMode('kanban')" class="px-3 py-1 rounded-lg text-xs font-medium text-gray-400 hover:text-white">
+              <i class="fa-solid fa-columns-stripe mr-1"></i> Kanban
+            </button>
+          </div>
+
+          <!-- Create Task Modal Trigger Button -->
+          <button onclick="openAddTaskModal()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white font-medium text-xs shadow-lg shadow-brand-500/20 hover:opacity-95 transition-all flex items-center space-x-1.5">
+            <i class="fa-solid fa-plus text-xs"></i>
+            <span>Add Task</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- List View Container -->
+      <div id="tasks-list-container" class="space-y-3">
+        <!-- Rendered Dynamically via JS -->
+      </div>
+
+      <!-- Kanban View Container -->
+      <div id="tasks-kanban-container" class="hidden grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- Kanban Column: To Do -->
+        <div class="bg-dark-card border border-dark-border rounded-2xl p-4 flex flex-col min-h-[500px]">
+          <div class="flex items-center justify-between mb-4 border-b border-dark-border pb-2">
+            <h3 class="text-sm font-bold text-gray-300 flex items-center">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-400 mr-2"></span> To Do
+            </h3>
+            <span id="kanban-todo-count" class="text-xs bg-dark-bg px-2 py-0.5 rounded-full border border-dark-border font-mono text-gray-400">0</span>
+          </div>
+          <div id="kanban-col-todo" class="kanban-dropzone flex-1 space-y-3" data-status="todo" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'todo')">
+            <!-- Items rendered JS -->
+          </div>
+        </div>
+
+        <!-- Kanban Column: In Progress -->
+        <div class="bg-dark-card border border-dark-border rounded-2xl p-4 flex flex-col min-h-[500px]">
+          <div class="flex items-center justify-between mb-4 border-b border-dark-border pb-2">
+            <h3 class="text-sm font-bold text-gray-300 flex items-center">
+              <span class="w-2.5 h-2.5 rounded-full bg-brand-400 mr-2"></span> In Progress
+            </h3>
+            <span id="kanban-in-progress-count" class="text-xs bg-dark-bg px-2 py-0.5 rounded-full border border-dark-border font-mono text-gray-400">0</span>
+          </div>
+          <div id="kanban-col-in-progress" class="kanban-dropzone flex-1 space-y-3" data-status="in-progress" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'in-progress')">
+            <!-- Items rendered JS -->
+          </div>
+        </div>
+
+        <!-- Kanban Column: Completed -->
+        <div class="bg-dark-card border border-dark-border rounded-2xl p-4 flex flex-col min-h-[500px]">
+          <div class="flex items-center justify-between mb-4 border-b border-dark-border pb-2">
+            <h3 class="text-sm font-bold text-gray-300 flex items-center">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 mr-2"></span> Done
+            </h3>
+            <span id="kanban-done-count" class="text-xs bg-dark-bg px-2 py-0.5 rounded-full border border-dark-border font-mono text-gray-400">0</span>
+          </div>
+          <div id="kanban-col-done" class="kanban-dropzone flex-1 space-y-3" data-status="done" ondragover="handleDragOver(event)" ondrop="handleDrop(event, 'done')">
+            <!-- Items rendered JS -->
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==================== VIEW 3: ANALYTICS DASHBOARD ==================== -->
+    <section id="view-analytics" class="hidden space-y-8 animate-fadeIn">
+      
+      <!-- Stats Overview Cards Grid -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
+        <!-- Total Hours -->
+        <div class="bg-dark-card border border-dark-border rounded-2xl p-5 shadow-lg">
+          <div class="flex items-center justify-between text-gray-400 text-xs mb-2">
+            <span>Total Focus Time</span>
+            <i class="fa-solid fa-clock text-brand-400"></i>
+          </div>
+          <div id="stats-total-hours" class="text-2xl sm:text-3xl font-bold font-mono text-white">0.0 <span class="text-xs font-sans text-gray-400">hrs</span></div>
+        </div>
+
+        <!-- Completed Tasks -->
+        <div class="bg-dark-card border border-dark-border rounded-2xl p-5 shadow-lg">
+          <div class="flex items-center justify-between text-gray-400 text-xs mb-2">
+            <span>Completed Tasks</span>
+            <i class="fa-solid fa-check-double text-emerald-400"></i>
+          </div>
+          <div id="stats-completed-tasks" class="text-2xl sm:text-3xl font-bold font-mono text-emerald-400">0</div>
+        </div>
+
+        <!-- Total Tomatoes -->
+        <div class="bg-dark-card border border-dark-border rounded-2xl p-5 shadow-lg">
+          <div class="flex items-center justify-between text-gray-400 text-xs mb-2">
+            <span>Pomodoros Earned</span>
+            <i class="fa-solid fa-apple-whole text-rose-500"></i>
+          </div>
+          <div id="stats-total-pomo" class="text-2xl sm:text-3xl font-bold font-mono text-rose-400">0 🍅</div>
+        </div>
+
+        <!-- Day Streak -->
+        <div class="bg-dark-card border border-dark-border rounded-2xl p-5 shadow-lg">
+          <div class="flex items-center justify-between text-gray-400 text-xs mb-2">
+            <span>Focus Streak</span>
+            <i class="fa-solid fa-bolt text-amber-400"></i>
+          </div>
+          <div id="stats-streak" class="text-2xl sm:text-3xl font-bold font-mono text-amber-400">1 <span class="text-xs font-sans text-gray-400">days</span></div>
+        </div>
+      </div>
+
+      <!-- Charts Section Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- Daily Focus Hours Bar Chart -->
+        <div class="lg:col-span-8 bg-dark-card border border-dark-border rounded-3xl p-6 shadow-xl">
+          <h3 class="text-sm font-bold text-gray-200 mb-4 flex items-center">
+            <i class="fa-solid fa-chart-column text-brand-400 mr-2"></i> Weekly Focus Session Activity (Hours)
+          </h3>
+          <div class="h-64 relative">
+            <canvas id="weekly-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Category Pie Chart -->
+        <div class="lg:col-span-4 bg-dark-card border border-dark-border rounded-3xl p-6 shadow-xl flex flex-col justify-between">
+          <h3 class="text-sm font-bold text-gray-200 mb-4 flex items-center">
+            <i class="fa-solid fa-chart-pie text-purple-400 mr-2"></i> Task Category Distribution
+          </h3>
+          <div class="h-56 relative flex items-center justify-center">
+            <canvas id="category-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- GitHub-Style Activity Heatmap Grid -->
+      <div class="bg-dark-card border border-dark-border rounded-3xl p-6 shadow-xl space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-bold text-gray-200 flex items-center">
+            <i class="fa-solid fa-calendar-days text-emerald-400 mr-2"></i> Yearly Focus Activity Heatmap
+          </h3>
+          <span class="text-xs text-gray-400">Last 30 Days</span>
+        </div>
+        
+        <!-- Heatmap Grid -->
+        <div id="heatmap-grid" class="flex flex-wrap gap-2 pt-2 justify-start">
+          <!-- Rendered JS -->
+        </div>
+
+        <div class="flex items-center justify-end space-x-2 text-[10px] text-gray-400 pt-2">
+          <span>Less</span>
+          <span class="w-3 h-3 rounded bg-dark-bg border border-dark-border"></span>
+          <span class="w-3 h-3 rounded bg-emerald-900/60"></span>
+          <span class="w-3 h-3 rounded bg-emerald-700"></span>
+          <span class="w-3 h-3 rounded bg-emerald-500"></span>
+          <span class="w-3 h-3 rounded bg-emerald-400 shadow-sm shadow-emerald-500/50"></span>
+          <span>More</span>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ==================== FOCUS MODE OVERLAY ==================== -->
+  <div id="focus-overlay" class="hidden fixed inset-0 z-50 bg-dark-bg flex flex-col items-center justify-between p-8 sm:p-12 transition-all duration-300">
+    <!-- Top Overlay Bar -->
+    <div class="w-full max-w-4xl flex items-center justify-between">
+      <div class="flex items-center space-x-2 text-brand-400 font-bold text-lg">
+        <i class="fa-solid fa-graduation-cap"></i>
+        <span>StudyFlow Focus</span>
+      </div>
+      <button onclick="exitFocusOverlay()" class="px-4 py-2 rounded-xl bg-dark-card border border-dark-border text-gray-300 hover:text-white hover:border-gray-500 transition-all text-xs font-semibold flex items-center space-x-1.5">
+        <i class="fa-solid fa-compress text-xs"></i>
+        <span>Exit Focus Mode</span>
+      </button>
+    </div>
+
+    <!-- Center Immersion Timer & Target Task -->
+    <div class="flex flex-col items-center justify-center space-y-6 my-auto text-center max-w-2xl">
+      <!-- Active Task Title -->
+      <div id="overlay-task-badge" class="px-4 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-300 text-sm font-medium flex items-center">
+        <i class="fa-solid fa-bullseye text-rose-500 mr-2"></i>
+        <span id="overlay-task-title">No Active Task Selected</span>
+      </div>
+
+      <!-- Giant Countdown Display -->
+      <div id="overlay-timer-display" class="font-mono text-7xl sm:text-9xl font-extrabold tracking-tight text-white drop-shadow-2xl">
+        25:00
+      </div>
+
+      <!-- Overlay Quick Controls -->
+      <div class="flex items-center space-x-6 pt-4">
+        <button id="overlay-start-btn" onclick="toggleTimer()" class="w-40 py-4 rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white font-bold shadow-xl shadow-brand-500/30 hover:opacity-95 text-lg flex items-center justify-center space-x-2 transition-all">
+          <i id="overlay-timer-icon" class="fa-solid fa-play text-base"></i>
+          <span id="overlay-btn-text">Start</span>
+        </button>
+        <button onclick="resetTimer()" class="p-4 rounded-2xl bg-dark-card border border-dark-border text-gray-400 hover:text-white transition-all text-lg">
+          <i class="fa-solid fa-rotate-left"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bottom Audio Controls in Focus Mode -->
+    <div class="w-full max-w-xl bg-dark-card/60 border border-dark-border/60 rounded-2xl p-4 flex items-center justify-around text-xs text-gray-300">
+      <span class="font-semibold text-gray-400"><i class="fa-solid fa-headphones mr-1"></i> Quick Ambient:</span>
+      <button onclick="quickToggleAmbient('rain')" class="hover:text-brand-400 transition-all">🌧️ Rain</button>
+      <button onclick="quickToggleAmbient('whitenoise')" class="hover:text-brand-400 transition-all">💨 Noise</button>
+      <button onclick="quickToggleAmbient('synth')" class="hover:text-brand-400 transition-all">🎹 Synth</button>
+    </div>
+  </div>
+
+  <!-- ==================== ADD / EDIT TASK MODAL ==================== -->
+  <div id="task-modal" class="hidden fixed inset-0 z-50 glass-effect flex items-center justify-center p-4">
+    <div class="bg-dark-card border border-dark-border rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-5 animate-scaleUp">
+      <div class="flex items-center justify-between border-b border-dark-border pb-3">
+        <h3 id="modal-title" class="text-base font-bold text-white flex items-center">
+          <i class="fa-solid fa-pen-to-square text-brand-400 mr-2"></i> Add New Task
+        </h3>
+        <button onclick="closeTaskModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form id="task-form" onsubmit="saveTask(event)" class="space-y-4">
+        <input type="hidden" id="task-id">
+
+        <!-- Title -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 mb-1">Task Title *</label>
+          <input type="text" id="form-task-title" required placeholder="e.g. Finish Organic Chemistry Chapter 3" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+
+        <!-- Description -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 mb-1">Description (Optional)</label>
+          <textarea id="form-task-desc" rows="2" placeholder="Notes, instructions or links..." class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"></textarea>
+        </div>
+
+        <!-- Category & Priority Row -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">Category</label>
+            <select id="form-task-category" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-brand-500">
+              <option value="Study">📚 Study</option>
+              <option value="Work">💼 Work</option>
+              <option value="Life">🌿 Life</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">Priority</label>
+            <select id="form-task-priority" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-xs text-gray-200 focus:outline-none focus:border-brand-500">
+              <option value="P1">High (P1)</option>
+              <option value="P2" selected>Medium (P2)</option>
+              <option value="P3">Low (P3)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Estimated Pomodoros & Due Date -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">Est. Pomodoros 🍅</label>
+            <input type="number" id="form-task-est-pomo" min="1" max="20" value="2" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">Due Date</label>
+            <input type="date" id="form-task-due" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+          </div>
+        </div>
+
+        <!-- Subtasks Dynamic Input Checklist -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 mb-1">Subtasks Checklist</label>
+          <div id="subtasks-input-container" class="space-y-2 mb-2">
+            <!-- Dynamic Subtask Inputs -->
+          </div>
+          <button type="button" onclick="addSubtaskInput()" class="text-xs text-brand-400 hover:text-brand-300 font-medium flex items-center">
+            <i class="fa-solid fa-plus mr-1"></i> Add Subtask
+          </button>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex items-center justify-end space-x-3 pt-3 border-t border-dark-border">
+          <button type="button" onclick="closeTaskModal()" class="px-4 py-2 rounded-xl bg-dark-bg text-gray-400 hover:text-white text-xs">Cancel</button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white font-medium text-xs shadow-lg shadow-brand-500/20 hover:opacity-95">Save Task</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main JavaScript Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
