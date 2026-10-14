@@ -1,8 +1,8 @@
 /* ==========================================================================
    StudyFlow 全域邏輯與狀態管理
    ========================================================================== */
-const STORAGE_KEY_TASKS = 'studyflow_tasks_v1';
-const STORAGE_KEY_LOGS = 'studyflow_logs_v1';
+const STORAGE_KEY_TASKS = 'doflow_tasks_v1';
+const STORAGE_KEY_LOGS = 'doflow_logs_v1';
 
 let appState = {
   activeTab: 'timer',
@@ -160,6 +160,15 @@ function handleTimerCompletion() {
 /* ==========================================================================
    任務動態過濾與渲染邏輯（修復分類與搜尋連動）
    ========================================================================== */
+/* ==========================================================================
+   任務動態過濾與渲染邏輯 (白底極簡版)
+   ========================================================================== */
+/* ==========================================================================
+   任務動態過濾與渲染邏輯 (白底 + 深色卡片版)
+   ========================================================================== */
+/* ==========================================================================
+   任務動態過濾與渲染邏輯 (全深色系)
+   ========================================================================== */
 function renderTasks() {
   const container = document.getElementById('tasks-list-container');
   if (!container) return;
@@ -177,28 +186,27 @@ function renderTasks() {
   });
 
   if (filtered.length === 0) {
-    container.innerHTML = `<div class="text-center py-8 text-gray-500 text-xs">沒有找到符合條件的任務。</div>`;
+    container.innerHTML = `<div class="text-center py-8 text-gray-500 text-xs font-medium">沒有找到符合條件的任務。</div>`;
     return;
   }
 
   const categoryMap = { Study: '📚 課業學習', Work: '💼 工作專案', Life: '🌿 個人生活' };
 
   container.innerHTML = filtered.map(t => `
-    <div class="bg-dark-card border border-dark-border p-4 rounded-2xl flex items-center justify-between">
+    <div class="dark-card p-4 rounded-2xl flex items-center justify-between">
       <div>
         <div class="flex items-center space-x-2 mb-1">
           <h4 class="text-sm font-bold text-white">${t.title}</h4>
-          <span class="text-[10px] px-2 py-0.5 rounded bg-dark-bg border border-dark-border text-brand-300 font-semibold">
+          <span class="text-[10px] px-2 py-0.5 rounded-md bg-[#0b0f17] border border-white/10 text-brand-300 font-semibold">
             ${categoryMap[t.category] || '📚 課業學習'}
           </span>
         </div>
-        <span class="text-[10px] text-gray-400">預估番茄: ${t.estimatedPomodoros || 1} 🍅</span>
+        <span class="text-[10px] text-gray-400 font-medium">預估番茄: ${t.estimatedPomodoros || 1} 🍅</span>
       </div>
-      <button onclick="setFocusTarget('${t.id}')" class="px-3 py-1 rounded-xl bg-brand-600 text-white text-xs">專注</button>
+      <button onclick="setFocusTarget('${t.id}')" class="px-3.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold transition-all shadow-sm">專注</button>
     </div>
   `).join('');
 }
-
 function setFocusTarget(id) {
   appState.activeTaskId = id;
   updateTargetTaskUI();
