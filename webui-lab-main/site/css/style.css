@@ -1,38 +1,47 @@
+/* 引入外部 Google 字型：Plus Jakarta Sans（無襯線字體）與 JetBrains Mono（等寬字體） */
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap');
 
+/* 全局頁面主體樣式設定 */
 body {
-  background-color: #0b0f17;
-  color: #f3f4f6;
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  user-select: none;
-  -webkit-user-select: none;
+  background-color: #0b0f17; /* 設定背景顏色為深藍黑色 */
+  color: #f3f4f6; /* 設定預設文字顏色為淺灰白色 */
+  font-family: 'Plus Jakarta Sans', sans-serif; /* 套用主字型，若無法載入則備用系統無襯線字體 */
+  user-select: none; /* 禁止使用者選取頁面文字 */
+  -webkit-user-select: none; /* 針對 WebKit 核心瀏覽器（如 Safari、Chrome）禁止文字選取 */
 }
 
-/* 深色質感卡片與微邊框 */
+/* 深色質感卡片與微邊框樣式 */
 .dark-card {
-  background-color: #151c28;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background-color: #151c28; /* 卡片背景色（比頁面背景略亮一點的深藍色） */
+  border: 1px solid rgba(255, 255, 255, 0.08); /* 1px 細邊框，帶有 8% 透明度的白色 */
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5); /* 卡片陰影，增加視覺懸浮層次感 */
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); /* 平滑過渡動畫，持續 0.25 秒 */
 }
 
+/* 卡片懸浮（Hover）時的動態效果 */
 .dark-card:hover {
-  border-color: rgba(99, 102, 241, 0.3);
-  box-shadow: 0 15px 35px -5px rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.3); /* 邊框顏色轉換為帶有 30% 透明度的靛藍色 */
+  box-shadow: 0 15px 35px -5px rgba(99, 102, 241, 0.15); /* 陰影發散並帶有微弱的靛藍色發光效果 */
 }
 
-/* 捲軸美化 */
+/* 網頁滾動條（Scrollbar）整體尺寸 */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 6px; /* 垂直滾動條寬度 */
+  height: 6px; /* 水平滾動條高度 */
 }
+
+/* 滾動條軌道（Track）樣式 */
 ::-webkit-scrollbar-track {
-  background: #0b0f17;
+  background: #0b0f17; /* 軌道背景色與頁面主體背景色保持一致 */
 }
+
+/* 滾動條滑塊（Thumb）樣式 */
 ::-webkit-scrollbar-thumb {
-  background: #2a364f;
-  border-radius: 9999px;
+  background: #2a364f; /* 滑塊預設顏色 */
+  border-radius: 9999px; /* 完全圓角的膠囊形狀 */
 }
+
+/* 滾動條滑塊懸浮（Hover）時的樣式 */
 ::-webkit-scrollbar-thumb:hover {
-  background: #6366f1;
+  background: #6366f1; /* 滑塊懸浮時變為亮靛藍色 */
 }
