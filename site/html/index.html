@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DoFlow - 現代學習生產力中心</title>
+  
+  <!-- 引入 CDN 資源：Tailwind CSS、FontAwesome 圖示庫、Chart.js 圖表庫 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Tailwind CSS 品牌色系與字體客製化設定 -->
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Plus Jakarta Sans', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- 引用外部客製化 CSS 樣式檔 -->
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body class="h-full flex flex-col bg-[#0b0f17] text-gray-100 antialiased">
+
+  <!-- ==========================================================================
+      Header 頂部導覽列
+      ========================================================================== -->
+  <header class="border-b border-white/10 bg-[#0b0f17]/80 sticky top-0 z-40 backdrop-blur-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+
+      <!-- 開啟設定按鈕 -->
+      <button onclick="openSettingsModal()" class="px-3 py-1.5 rounded-xl border border-white/10 hover:bg-white/5 text-gray-300 text-xs transition-all flex items-center space-x-1.5">
+        <i class="fa-solid fa-gear"></i>
+        <span>設定</span>
+      </button>
+
+      <!-- 品牌 Logo 與名稱標示 -->
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-brand-500/30">
+          <i class="fa-solid fa-wave-square"></i>
+        </div>  
+        <div>
+          <h1 class="text-lg font-extrabold bg-gradient-to-r from-white via-indigo-100 to-brand-400 bg-clip-text text-transparent">DoFlow</h1>
+          <p class="text-[10px] text-gray-400 tracking-wider -mt-1 hidden sm:block uppercase font-bold">Productivity & To-Do Hub</p>
+        </div>
+      </div>
+
+      <!-- 主要功能切換分頁標籤 (Timer / Tasks / Analytics) -->
+      <nav class="flex items-center space-x-1 bg-[#151c28] p-1.5 rounded-2xl border border-white/10">
+        <button id="tab-timer-btn" onclick="switchTab('timer')" class="nav-tab active px-4 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center space-x-2 bg-brand-600 text-white shadow-md">
+          <i class="fa-solid fa-stopwatch text-xs"></i><span>番茄鐘</span>
+        </button>
+        <button id="tab-tasks-btn" onclick="switchTab('tasks')" class="nav-tab px-4 py-1.5 rounded-xl text-xs font-semibold text-gray-400 hover:text-white transition-all duration-200 flex items-center space-x-2">
+          <i class="fa-solid fa-list-check text-xs"></i><span>任務清單</span>
+        </button>
+        <button id="tab-analytics-btn" onclick="switchTab('analytics')" class="nav-tab px-4 py-1.5 rounded-xl text-xs font-semibold text-gray-400 hover:text-white transition-all duration-200 flex items-center space-x-2">
+          <i class="fa-solid fa-chart-pie text-xs"></i><span>數據分析</span>
+        </button>
+      </nav>
+
+      <!-- 全螢幕沉浸模式觸發按鈕 -->
+      <div class="flex items-center space-x-2">
+        <button onclick="enterFocusOverlay()" class="px-3.5 py-2 rounded-xl bg-[#151c28] border border-white/10 text-gray-300 hover:text-brand-400 hover:border-brand-500/40 text-xs font-bold transition-all flex items-center space-x-2 shadow-sm">
+          <i class="fa-solid fa-expand text-xs"></i><span class="hidden md:inline">DoFlow 沉浸專注</span>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ==========================================================================
+      主內容區塊（依分頁動態顯示/隱藏）
+      ========================================================================== -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+    <!-- 1. 番茄鐘分頁頁面 -->
+    <section id="view-timer" class="space-y-8">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        <!-- 左側：計時器主卡片 -->
+        <div class="lg:col-span-7 dark-card rounded-3xl p-8 sm:p-10 flex flex-col items-center justify-center relative overflow-hidden">
+          <!-- 背景光暈裝飾效果 -->
+          <div class="absolute w-72 h-72 rounded-full bg-brand-600/10 filter blur-3xl pointer-events-none"></div>
+
+          <!-- 番茄鐘模式切換膠囊按鈕 (專注 / 短休息 / 長休息) -->
+          <div class="flex bg-[#0b0f17] p-1.5 rounded-2xl border border-white/10 mb-8 z-10">
+            <button onclick="setTimerMode('focus')" id="mode-focus" class="timer-mode-btn px-5 py-2 rounded-xl text-xs font-bold transition-all bg-brand-600 text-white shadow-md">
+              <i class="fa-solid fa-fire mr-1.5 text-rose-400"></i>專注
+            </button>
+            <button onclick="setTimerMode('shortBreak')" id="mode-shortBreak" class="timer-mode-btn px-5 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white transition-all">
+              <i class="fa-solid fa-mug-hot mr-1.5 text-emerald-400"></i>短休息
+            </button>
+            <button onclick="setTimerMode('longBreak')" id="mode-longBreak" class="timer-mode-btn px-5 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white transition-all">
+              <i class="fa-solid fa-couch mr-1.5 text-indigo-400"></i>長休息
+            </button>
+          </div>
+
+          <!-- SVG 圓形進度條與倒數計時顯示 -->
+          <div class="relative w-72 h-72 sm:w-80 sm:h-80 flex items-center justify-center my-4 z-10">
+            <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+              <!-- 底圈外軌 -->
+              <circle cx="50" cy="50" r="44" stroke="currentColor" stroke-width="3" fill="none" class="text-white/5" />
+              <!-- 動態進度圓環 -->
+              <circle id="timer-progress-circle" cx="50" cy="50" r="44" stroke="currentColor" stroke-width="4" fill="none" stroke-dasharray="276.46" stroke-dashoffset="0" stroke-linecap="round" class="text-brand-500 transition-all duration-1000 ease-linear" />
+            </svg>
+            <!-- 時間數字與當前模式標籤 -->
+            <div class="absolute text-center flex flex-col items-center">
+              <span id="timer-display" class="font-mono text-6xl sm:text-7xl font-extrabold tracking-tight text-white drop-shadow-md">25:00</span>
+              <span id="timer-mode-label" class="text-xs uppercase tracking-widest text-brand-400 font-bold mt-3 px-3.5 py-1 rounded-full bg-brand-500/10 border border-brand-500/20">專注時間</span>
+            </div>
+          </div>
+
+          <!-- 計時器操作控制按鈕 (開始 / 暫停、重置) -->
+          <div class="flex items-center space-x-4 mt-8 z-10">
+            <button id="timer-start-btn" onclick="toggleTimer()" class="w-40 py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white font-bold shadow-lg shadow-brand-500/25 hover:scale-[1.02] active:scale-95 transition-all text-sm flex items-center justify-center space-x-2">
+              <i id="timer-icon" class="fa-solid fa-play text-xs"></i>
+              <span id="timer-btn-text">開始專注</span>
+            </button>
+            <button onclick="resetTimer()" class="p-3.5 rounded-2xl bg-[#0b0f17] border border-white/10 text-gray-400 hover:text-white transition-all" title="重置計時">
+              <i class="fa-solid fa-rotate-left"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 右側：當前專注目標卡片與今日數據看板 -->
+        <div class="lg:col-span-5 space-y-6">
+          <!-- 當前專注目標卡片 -->
+          <div class="dark-card rounded-3xl p-6 relative">
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-xs uppercase font-extrabold tracking-wider text-brand-400 flex items-center">
+                <i class="fa-solid fa-bullseye text-rose-500 mr-2"></i> 當前目標任務
+              </span>
+              <button onclick="switchTab('tasks')" class="text-xs text-gray-400 hover:text-brand-400 transition-all font-bold">
+                選擇任務 <i class="fa-solid fa-chevron-right text-[10px] ml-1"></i>
+              </button>
+            </div>
+            <div id="active-task-container" class="p-5 rounded-2xl bg-[#0b0f17]/60 border border-white/5 min-h-[90px] flex items-center justify-center text-center">
+              <p class="text-gray-500 text-xs font-medium">尚未選擇進行中的任務</p>
+            </div>
+          </div>
+
+          <!-- 今日統計快捷卡片 -->
+          <div class="grid grid-cols-2 gap-4">
+            <div class="dark-card rounded-3xl p-5">
+              <div class="text-gray-400 text-xs font-bold mb-1">今日專注時間</div>
+              <div id="today-focus-hours" class="text-2xl font-extrabold font-mono text-emerald-400">0.0 <span class="text-xs font-sans text-gray-500">小時</span></div>
+            </div>
+            <div class="dark-card rounded-3xl p-5">
+              <div class="text-gray-400 text-xs font-bold mb-1">獲得番茄數</div>
+              <div id="today-pomo-count" class="text-2xl font-extrabold font-mono text-rose-400">0 <span class="text-xs font-sans text-gray-500">🍅</span></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 2. 任務清單分頁頁面 -->
+    <section id="view-tasks" class="hidden space-y-6">
+      <!-- 任務工具列：搜尋、類別篩選與新增按鈕 -->
+      <div class="dark-card rounded-2xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-3 flex-1">
+          <!-- 關鍵字搜尋框 -->
+          <div class="relative flex-1 min-w-[200px]">
+            <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-gray-500 text-xs"></i>
+            <input type="text" id="task-search-input" placeholder="搜尋任務..." oninput="renderTasks()" class="w-full bg-[#0b0f17] border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500">
+          </div>
+          <!-- 分類篩選下拉選單 -->
+          <select id="task-category-filter" onchange="renderTasks()" class="bg-[#0b0f17] border border-white/10 rounded-xl px-3 py-2 text-xs text-gray-300 focus:outline-none focus:border-brand-500">
+            <option value="all">所有分類</option>
+            <option value="Study">📚 課業學習</option>
+            <option value="Work">💼 工作專案</option>
+            <option value="Life">🌿 個人生活</option>
+          </select>
+        </div>
+        <!-- 打開新增任務彈窗的按鈕 -->
+        <button onclick="openAddTaskModal()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center space-x-1.5">
+          <i class="fa-solid fa-plus"></i><span>新增任務</span>
+        </button>
+      </div>
+
+      <!-- 任務列表動態渲染容器 -->
+      <div id="tasks-list-container" class="space-y-3"></div>
+    </section>
+
+    <!-- 3. 數據分析分頁頁面 -->
+    <section id="view-analytics" class="hidden space-y-8">
+      <!-- 統計數據數據卡片區 -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="dark-card rounded-2xl p-5">
+          <div class="text-gray-400 text-xs font-bold mb-2">累積專注時間</div>
+          <div id="stats-total-hours" class="text-2xl font-extrabold font-mono text-white">0.0 <span class="text-xs font-sans text-gray-500">小時</span></div>
+        </div>
+        <div class="dark-card rounded-2xl p-5">
+          <div class="text-gray-400 text-xs font-bold mb-2">收穫番茄總數</div>
+          <div id="stats-total-pomo" class="text-2xl font-extrabold font-mono text-rose-400">0 🍅</div>
+        </div>
+      </div>
+      <!-- Chart.js 本週專注統計長條圖容器 -->
+      <div class="dark-card rounded-3xl p-6">
+        <h3 class="text-sm font-bold text-white mb-4 flex items-center"><i class="fa-solid fa-chart-column text-brand-400 mr-2"></i> 本週專注時間統計</h3>
+        <div class="h-64 relative"><canvas id="weekly-chart"></canvas></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==========================================================================
+      全螢幕沉浸專注覆蓋視圖 (Focus Overlay)
+      ========================================================================== -->
+  <div id="focus-overlay" class="hidden fixed inset-0 z-50 bg-[#0b0f17] text-white flex flex-col items-center justify-between p-8">
+    <div class="w-full max-w-4xl flex items-center justify-between">
+      <span class="text-brand-400 font-extrabold text-lg"><i class="fa-solid fa-graduation-cap mr-2"></i>StudyFlow 沉浸專注</span>
+      <button onclick="exitFocusOverlay()" class="px-4 py-2 rounded-xl bg-[#151c28] border border-white/10 text-white text-xs font-bold transition-all">退出全螢幕</button>
+    </div>
+    <div class="text-center my-auto">
+      <div id="overlay-task-title" class="px-4 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-300 text-xs mb-6 inline-block">尚未選擇任務</div>
+      <div id="overlay-timer-display" class="font-mono text-8xl sm:text-9xl font-extrabold text-white tracking-tight">25:00</div>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+      ⚙️ 設定選單彈窗 (Settings Modal) - 獨立層級
+      ========================================================================== -->
+  <div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[9999] flex items-center justify-center hidden">
+    <div class="bg-[#1e293b] border border-slate-700 w-[90%] max-w-md p-6 rounded-2xl shadow-2xl relative space-y-6 text-white my-auto">
+      
+      <!-- 標題與關閉按鈕 -->
+      <div class="flex items-center justify-between border-b border-slate-700 pb-4">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-gear text-indigo-400"></i> 番茄鐘與偏好設定
+        </h3>
+        <button type="button" onclick="closeSettingsModal()" class="text-slate-400 hover:text-white transition-colors p-1">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- 1. 彈性時間設定 -->
+      <div class="space-y-3">
+        <label class="text-xs font-bold text-slate-200 block">⏱️ 專注與休息時間（分鐘）</label>
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <span class="text-[10px] text-slate-400 block mb-1">專注</span>
+            <input type="number" id="setting-focus-time" value="25" min="1" max="120" class="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <span class="text-[10px] text-slate-400 block mb-1">短休息</span>
+            <input type="number" id="setting-short-break" value="5" min="1" max="60" class="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+          <div>
+            <span class="text-[10px] text-slate-400 block mb-1">長休息</span>
+            <input type="number" id="setting-long-break" value="15" min="1" max="60" class="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500">
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. 提示音與音量設定 -->
+      <div class="space-y-3">
+        <label class="text-xs font-bold text-slate-200 block">🔔 完成提示音與音量</label>
+        <div class="flex items-center space-x-3">
+          <select id="setting-sound-type" class="bg-[#0f172a] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-indigo-500 flex-1">
+            <option value="bell">清脆電子聲</option>
+            <option value="wooden">敲擊木魚聲</option>
+            <option value="alarm">經典鬧鐘聲</option>
+          </select>
+          <input type="range" id="setting-volume" min="0" max="1" step="0.1" value="0.8" class="w-28 accent-indigo-500">
+        </div>
+      </div>
+
+      <!-- 3. 自動跨階段開關 -->
+      <div class="space-y-3 pt-2 border-t border-slate-700">
+        <label class="text-xs font-bold text-slate-200 block">🔄 自動跨階段</label>
+        <div class="space-y-2">
+          <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer">
+            <span>專注結束後，自動開始休息</span>
+            <input type="checkbox" id="setting-auto-break" class="accent-indigo-500 w-4 h-4 rounded">
+          </label>
+          <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer">
+            <span>休息結束後，自動開始專注</span>
+            <input type="checkbox" id="setting-auto-focus" class="accent-indigo-500 w-4 h-4 rounded">
+          </label>
+        </div>
+      </div>
+
+      <!-- 儲存按鈕 -->
+      <div class="pt-2">
+        <button type="button" onclick="saveSettingsModal()" class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition-all shadow-md">
+          儲存變更
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+      新增任務彈出視窗 (Modal)
+      ========================================================================== -->
+  <div id="task-modal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-[#151c28] border border-white/10 rounded-3xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <h3 class="text-sm font-bold text-white">新增任務</h3>
+        <button onclick="closeTaskModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      
+      <!-- 新增任務表單 -->
+      <form id="task-form" onsubmit="saveTask(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-gray-400 mb-1">任務名稱 *</label>
+          <input type="text" id="form-task-title" required placeholder="請輸入任務名稱..." class="w-full bg-[#0b0f17] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500">
+        </div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-gray-400 mb-1">分類</label>
+            <select id="form-task-category" class="w-full bg-[#0b0f17] border border-white/10 rounded-xl px-3 py-2 text-xs text-gray-300">
+              <option value="Study">📚 課業學習</option>
+              <option value="Work">💼 工作專案</option>
+              <option value="Life">🌿 個人生活</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-400 mb-1">預估番茄 🍅</label>
+            <input type="number" id="form-task-est-pomo" min="1" value="2" class="w-full bg-[#0b0f17] border border-white/10 rounded-xl px-3 py-2 text-xs text-white">
+          </div>
+        </div>
+        <div class="flex items-center justify-end space-x-2 pt-2 border-t border-white/10">
+          <button type="button" onclick="closeTaskModal()" class="px-4 py-2 rounded-xl bg-[#0b0f17] text-gray-400 text-xs font-semibold hover:bg-white/5">取消</button>
+          <button type="submit" class="px-4 py-2 rounded-xl bg-brand-600 text-white text-xs font-bold shadow-md hover:bg-brand-500">儲存任務</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 引用 JavaScript 主要邏輯檔案 -->
+  <script src="../js/app.js"></script>
+</body>
+</html>
