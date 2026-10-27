@@ -7,18 +7,34 @@ const STORAGE_KEY_TASKS = 'doflow_tasks_v1';
 const STORAGE_KEY_LOGS = 'doflow_logs_v1';
 
 // 應用程式核心狀態（AppState）物件
+// 應用程式核心狀態（AppState）物件
 let appState = {
-  activeTab: 'timer',              // 當前顯示的分頁 (timer | tasks | analytics)
-  taskViewMode: 'list',            // 任務檢視模式 (list | kanban)
-  activeTaskId: null,              // 當前選取並正在進行的任務 ID
-  timerMode: 'focus',              // 番茄鐘模式 (focus: 專注 | shortBreak: 短休 | longBreak: 長休)
-  timerRunning: false,             // 計時器是否運行中
-  timerSeconds: 25 * 60,           // 當前剩餘秒數
-  timerTotalDuration: 25 * 60,     // 當前模式的總秒數（用於計算環形進度條比例）
-  timerInterval: null,             // setInterval 的計時器 reference
-  customDurations: { focus: 25, shortBreak: 5, longBreak: 15 }, // 自訂各模式時間（分鐘）
-  tasks: [],                       // 任務清單陣列
-  focusLogs: []                    // 專注歷史紀錄陣列
+  activeTab: 'timer',
+  taskViewMode: 'list',
+  activeTaskId: null,
+  timerMode: 'focus',
+  timerRunning: false,
+  timerSeconds: 25 * 60,
+  timerTotalDuration: 25 * 60,
+  timerInterval: null,
+  
+  // 1. 自訂時間 (單位：分鐘)
+  customDurations: { focus: 25, shortBreak: 5, longBreak: 15 },
+  
+  // 2. 音效設定
+  audioSettings: {
+    sound: 'bell',        // 音效類型: 'bell' (風鈴) | 'alarm' (鬧鐘) | 'wooden' (木魚)
+    volume: 0.8,         // 音量: 0.0 ~ 1.0
+  },
+  
+  // 3. 自動跨階段設定
+  autoSwitchSettings: {
+    autoStartBreaks: false, // 專注結束後，是否自動開始休息
+    autoStartFocus: false,  // 休息結束後，是否自動開始專注
+  },
+
+  tasks: [],
+  focusLogs: []
 };
 
 // Chart.js 圖表實例全域變數
@@ -124,6 +140,27 @@ function setTimerMode(mode) {
   updateTimerDisplay();
 }
 
+// 音效網址對照表 (可替換為你專案目錄下的音效檔，例如 '/sounds/bell.mp3')
+const SOUND_SOURCES = {
+  bell: 'https://actions.google.com/sounds/v1/sfx/digital_watch_alarm.ogg',     // 清脆風鈴/電子聲
+  wooden: 'https://actions.google.com/sounds/v1/impacts/wood_plank_flicks.ogg',  // 木魚聲
+  alarm: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg'           // 經典鬧鐘聲
+};
+
+/**
+ * 播放倒數完成提示音
+ */
+function playCompletionSound() {
+  const soundKey = appState.audioSettings.sound || 'bell';
+  const soundUrl = SOUND_SOURCES[soundKey];
+
+  if (soundUrl) {
+    const audio = new Audio(soundUrl);
+    audio.volume = appState.audioSettings.volume; // 設定音量
+    audio.play().catch(err => console.warn("音效播放失敗或被瀏覽器阻擋:", err));
+  }
+}
+
 /**
  * 切換計時器（開始 / 暫停）
  */
@@ -184,6 +221,13 @@ function updateTimerDisplay() {
   const overlayTimerDisplay = document.getElementById('overlay-timer-display');
   if (overlayTimerDisplay) overlayTimerDisplay.textContent = formatted;
 
+  // 【新增】如果計時器正在執行，動態同步分頁標題
+  if (appState.timerRunning) {
+    const modeMap = { focus: '專注中', shortBreak: '短休息', longBreak: '長休息' };
+    const currentModeText = modeMap[appState.timerMode] || '專注中';
+    document.title = `(${formatted}) DoFlow - ${currentModeText}`;
+  }
+
   // 計算並更新 SVG 圓形進度條 strokeDashoffset
   const circle = document.getElementById('timer-progress-circle');
   if (circle) {
@@ -195,11 +239,19 @@ function updateTimerDisplay() {
 /**
  * 倒數計時完成時的處理邏輯
  */
+/**
+ * 倒數計時完成時的處理邏輯
+ */
 function handleTimerCompletion() {
-  toggleTimer();
-  
+  // 停止當前計時器
+  clearInterval(appState.timerInterval);
+  appState.timerRunning = false;
+
+  // 1. 播放提示音效
+  playCompletionSound();
+
+  // 2. 更新紀錄與切換模式
   if (appState.timerMode === 'focus') {
-    // 寫入專注歷史紀錄
     appState.focusLogs.push({
       id: Date.now(),
       timestamp: new Date().toISOString(),
@@ -207,17 +259,31 @@ function handleTimerCompletion() {
     });
     saveLocalStorage();
     updateAnalyticsStats();
-    alert("🎉 專注完成！獲得 1 個番茄 🍅");
-    
-    // 自動切換為短暫休息
+
+    sendNotification("DoFlow 專注完成！", "🎉 恭喜獲得 1 個番茄 🍅，辛苦了！");
+    if (typeof showToast === 'function') showToast("🎉 專注完成！獲得 1 個番茄 🍅");
+
+    // 切換至短暫休息
     setTimerMode('shortBreak');
+
+    // 【自動跨階段】：如果開啟自動開始休息
+    if (appState.autoSwitchSettings.autoStartBreaks) {
+      toggleTimer();
+    }
   } else {
-    alert("休息結束！準備開始專注囉。");
-    
-    // 休息結束後切換回專注模式
+    sendNotification("DoFlow 休息結束！", "☕ 休息時間結束囉，準備開始下一輪專注吧！");
+    if (typeof showToast === 'function') showToast("☕ 休息結束！準備開始專注囉。");
+
+    // 切換回專注模式
     setTimerMode('focus');
+
+    // 【自動跨階段】：如果開啟自動開始專注
+    if (appState.autoSwitchSettings.autoStartFocus) {
+      toggleTimer();
+    }
   }
 }
+
 
 /* ==========================================================================
    任務動態過濾與渲染邏輯 (全深色系)
@@ -458,4 +524,107 @@ function updateCustomDurations(focus, shortBreak, longBreak) {
   if (shortBreak) appState.customDurations.shortBreak = shortBreak;
   if (longBreak) appState.customDurations.longBreak = longBreak;
   setTimerMode(appState.timerMode);
+}
+
+/* ==========================================================================
+   設定 Modal 控制與狀態更新邏輯
+   ========================================================================== */
+
+/** 開啟設定 Modal 並帶入當前狀態 */
+function openSettingsModal() {
+  const modal = document.getElementById('settings-modal');
+  if (!modal) return;
+
+  // 填入時間
+  if (appState.customDurations) {
+    const elFocus = document.getElementById('setting-focus-time');
+    const elShort = document.getElementById('setting-short-break');
+    const elLong = document.getElementById('setting-long-break');
+    if (elFocus) elFocus.value = appState.customDurations.focus || 25;
+    if (elShort) elShort.value = appState.customDurations.shortBreak || 5;
+    if (elLong) elLong.value = appState.customDurations.longBreak || 15;
+  }
+
+  // 填入音效與音量
+  if (appState.audioSettings) {
+    const elSound = document.getElementById('setting-sound-type');
+    const elVol = document.getElementById('setting-volume');
+    if (elSound) elSound.value = appState.audioSettings.sound || 'bell';
+    if (elVol) elVol.value = appState.audioSettings.volume ?? 0.8;
+  }
+
+  // 填入自動跨階段狀態
+  if (appState.autoSwitchSettings) {
+    const elAutoBreak = document.getElementById('setting-auto-break');
+    const elAutoFocus = document.getElementById('setting-auto-focus');
+    if (elAutoBreak) elAutoBreak.checked = !!appState.autoSwitchSettings.autoStartBreaks;
+    if (elAutoFocus) elAutoFocus.checked = !!appState.autoSwitchSettings.autoStartFocus;
+  }
+
+  modal.classList.remove('hidden');
+}
+
+/** 關閉設定 Modal */
+function closeSettingsModal() {
+  const modal = document.getElementById('settings-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+/** 更新自訂時間 */
+function updateCustomDurations(focus, shortBreak, longBreak) {
+  if (!appState.customDurations) appState.customDurations = {};
+  if (focus) appState.customDurations.focus = parseInt(focus);
+  if (shortBreak) appState.customDurations.shortBreak = parseInt(shortBreak);
+  if (longBreak) appState.customDurations.longBreak = parseInt(longBreak);
+  
+  if (typeof setTimerMode === 'function') {
+    setTimerMode(appState.timerMode || 'focus');
+  }
+}
+
+/** 更新音效與音量 */
+function updateAudioSettings(soundKey, volume) {
+  if (!appState.audioSettings) appState.audioSettings = {};
+  if (soundKey) appState.audioSettings.sound = soundKey;
+  if (volume !== undefined) appState.audioSettings.volume = parseFloat(volume);
+}
+
+/** 更新自動跨階段 */
+function updateAutoSwitchSettings(autoBreaks, autoFocus) {
+  if (!appState.autoSwitchSettings) appState.autoSwitchSettings = {};
+  if (autoBreaks !== undefined) appState.autoSwitchSettings.autoStartBreaks = autoBreaks;
+  if (autoFocus !== undefined) appState.autoSwitchSettings.autoStartFocus = autoFocus;
+}
+
+/** 按下「儲存變更」按鈕時執行 */
+function saveSettingsModal() {
+  const focus = parseInt(document.getElementById('setting-focus-time')?.value) || 25;
+  const shortBreak = parseInt(document.getElementById('setting-short-break')?.value) || 5;
+  const longBreak = parseInt(document.getElementById('setting-long-break')?.value) || 15;
+
+  const sound = document.getElementById('setting-sound-type')?.value || 'bell';
+  const volume = parseFloat(document.getElementById('setting-volume')?.value) ?? 0.8;
+
+  const autoBreaks = document.getElementById('setting-auto-break')?.checked || false;
+  const autoFocus = document.getElementById('setting-auto-focus')?.checked || false;
+
+  // 1. 更新內部狀態
+  updateCustomDurations(focus, shortBreak, longBreak);
+  updateAudioSettings(sound, volume);
+  updateAutoSwitchSettings(autoBreaks, autoFocus);
+
+  // 2. 儲存至 LocalStorage
+  if (typeof saveLocalStorage === 'function') {
+    saveLocalStorage();
+  }
+
+  // 3. 關閉 Modal 視窗
+  closeSettingsModal();
+
+  // 4. 顯示提示
+  if (typeof showToast === 'function') {
+    showToast("⚙️ 設定已成功儲存！");
+  }
 }
