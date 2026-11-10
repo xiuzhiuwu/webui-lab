@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StudyFlow - 任務管理器與番茄鐘</title>
+  
+  <!-- 載入頁面使用的外部資源：Tailwind 負責樣式工具類別，Font Awesome 提供圖示，Google Fonts 提供字型。 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    // 擴充 Tailwind 的深色主題、品牌色、字型與動畫，供下方 HTML class 使用。
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff', 100: '#e0e7ff', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 900: '#1e1b4b',
+            },
+            dark: {
+              bg: '#0b0f17', card: '#151c28', hover: '#1e293b', border: '#2a364f',
+            }
+          },
+          animation: {
+            'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- 內嵌全局樣式：設定頁面底色、文字選取與游標行為、捲軸及玻璃效果。 -->
+  <style>
+    /* 全頁使用深色主題，允許表單欄位選取文字。 */
+    body { background-color: #0b0f17; color: #f3f4f6; font-family: 'Inter', sans-serif; user-select: none; }
+    body input, body textarea, body [contenteditable="true"] { user-select: text; }
+    /* 一般文字使用預設游標，按鈕使用手形游標，輸入欄位使用文字游標。 */
+    body, body *:not(input):not(textarea):not([contenteditable="true"]) { cursor: default !important; }
+    body button, body a, body select, body [role="button"], body input[type="button"],
+    body input[type="submit"], body input[type="range"], body .cursor-pointer { cursor: pointer !important; }
+    body input:not([type="button"]):not([type="submit"]):not([type="range"]), body textarea,
+    body [contenteditable="true"] { cursor: text !important; }
+    /* 自訂瀏覽器捲軸的大小、底色、滑塊顏色與懸停顏色。 */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0b0f17; }
+    ::-webkit-scrollbar-thumb { background: #2a364f; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4f46e5; }
+    /* 半透明模糊背景，供彈出視窗等玻璃質感元件使用。 */
+    .glass-effect { background: rgba(21, 28, 40, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+  </style>
+</head>
+<body class="h-full flex flex-col bg-dark-bg text-gray-100 antialiased overflow-x-hidden selection:bg-brand-500 selection:text-white">
+
+  <!-- 登入遮罩：未登入時顯示 Google 登入狀態、錯誤訊息與登入按鈕。 -->
+  <div id="auth-overlay" class="fixed inset-0 z-[60] flex items-center justify-center bg-dark-bg/95 p-4 backdrop-blur-md">
+    <section class="w-full max-w-md rounded-3xl border border-dark-border bg-dark-card p-8 text-center shadow-2xl">
+      <div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600 text-xl text-white">
+        <i class="fa-solid fa-graduation-cap"></i>
+      </div>
+      <h2 class="text-xl font-bold text-white">登入 StudyFlow</h2>
+      <p class="mt-2 text-sm text-gray-400">登入後即可使用番茄鐘、任務管理與數據分析。</p>
+      <p id="auth-message" class="mt-5 text-sm text-gray-300" role="status" aria-live="polite">正在確認登入狀態…</p>
+      <div id="google-button" class="mt-5 flex justify-center"></div>
+    </section>
+  </div>
+
+  <!-- 頂部導覽列：切換頁面、顯示登入者，並提供專注模式、通知與登出操作。 -->
+  <header class="border-b border-dark-border/80 bg-dark-bg/80 sticky top-0 z-30 backdrop-blur-md">
+    <div class="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 grid grid-cols-[1fr_auto_1fr] items-center">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-brand-500/30">
+          <i class="fa-solid fa-graduation-cap"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold bg-gradient-to-r from-white via-indigo-100 to-indigo-400 bg-clip-text text-transparent">StudyFlow</h1>
+          <p class="text-xs text-gray-400 -mt-1 hidden sm:block">學習生產力與專注中心</p>
+        </div>
+      </div>
+
+      <!-- 分頁頁籤：onclick 會呼叫 switchTab() 顯示對應的內容區。 -->
+      <nav class="justify-self-center flex items-center space-x-1 sm:space-x-2 bg-dark-card p-1 rounded-xl border border-dark-border">
+        <button id="tab-timer-btn" onclick="switchTab('timer')" class="nav-tab active px-3 sm:px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2 bg-brand-600 text-white shadow-md">
+          <i class="fa-solid fa-stopwatch text-xs"></i><span>番茄鐘</span>
+        </button>
+        <button id="tab-tasks-btn" onclick="switchTab('tasks')" class="nav-tab px-3 sm:px-4 py-1.5 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-hover transition-all duration-200 flex items-center space-x-2">
+          <i class="fa-solid fa-list-check text-xs"></i><span>任務清單</span>
+          <span id="pending-count-badge" class="ml-1 px-1.5 py-0.5 text-[10px] bg-brand-500/20 text-brand-400 rounded-full font-semibold">0</span>
+        </button>
+        <button id="tab-analytics-btn" onclick="switchTab('analytics')" class="nav-tab px-3 sm:px-4 py-1.5 rounded-lg text-sm font-medium text-gray-400 hover:text-white hover:bg-dark-hover transition-all duration-200 flex items-center space-x-2">
+          <i class="fa-solid fa-chart-pie text-xs"></i><span>數據分析</span>
+        </button>
+      </nav>
+
+      <!-- 右側工具欄：登出由 JavaScript 註冊 click 事件；其他按鈕使用 onclick。 -->
+      <div class="justify-self-end flex items-center space-x-2 sm:space-x-3">
+        <div class="flex items-center gap-2">
+          <span id="auth-user-name" class="hidden max-w-32 truncate text-xs text-gray-300 sm:inline"></span>
+          <button id="logout-button" type="button" class="rounded-xl border border-dark-border bg-dark-card px-2 py-2 text-xs text-gray-300 transition hover:border-brand-500/50 hover:text-white sm:px-3">登出</button>
+        </div>
+        <button onclick="enterFocusOverlay()" class="px-3 py-2 rounded-xl bg-dark-card border border-dark-border text-gray-300 hover:text-brand-400 hover:border-brand-500/50 text-sm font-medium transition-all flex items-center space-x-1.5 shadow-sm" title="專注全螢幕">
+          <i class="fa-solid fa-expand text-xs"></i><span class="hidden md:inline">專注模式</span>
+        </button>
+        <button onclick="requestNotificationPermission()" class="p-2 rounded-xl bg-dark-card border border-dark-border text-gray-400 hover:text-amber-400 transition-all" title="開啟桌面通知">
+          <i class="fa-regular fa-bell"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主內容視窗 -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+    <!-- 頁面 1：番茄鐘計時器，包含階段切換、倒數顯示、開始／暫停與重置。 -->
+    <section id="view-timer" class="space-y-8 animate-fadeIn">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        <div class="lg:col-span-7 bg-dark-card border border-dark-border rounded-3xl p-6 sm:p-10 shadow-2xl flex flex-col items-center justify-center relative overflow-hidden">
+          <div id="timer-glow" class="absolute w-72 h-72 rounded-full bg-brand-600/10 filter blur-3xl pointer-events-none transition-all duration-700"></div>
+
+          <!-- 計時階段選擇：點擊後由 setTimerMode() 重設對應階段時間。 -->
+          <div class="flex bg-dark-bg p-1.5 rounded-2xl border border-dark-border mb-8 z-10">
+            <button onclick="setTimerMode('focus')" id="mode-focus" class="timer-mode-btn active px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all bg-brand-600 text-white shadow">
+              <i class="fa-solid fa-fire mr-1.5 text-rose-400"></i>專注 (25分)
+            </button>
+            <button onclick="setTimerMode('shortBreak')" id="mode-shortBreak" class="timer-mode-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-gray-400 hover:text-white transition-all">
+              <i class="fa-solid fa-coffee mr-1.5 text-emerald-400"></i>短暫休息 (5分)
+            </button>
+            <button onclick="setTimerMode('longBreak')" id="mode-longBreak" class="timer-mode-btn px-4 py-2 rounded-xl text-xs sm:text-sm font-medium text-gray-400 hover:text-white transition-all">
+              <i class="fa-solid fa-couch mr-1.5 text-indigo-400"></i>長休息 (15分)
+            </button>
+          </div>
+
+          <!-- SVG 圓環呈現倒數進度；JavaScript 會更新圓環偏移與中央時間文字。 -->
+          <div class="relative w-64 h-64 sm:w-80 sm:h-80 flex items-center justify-center my-2 z-10">
+            <svg class="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+              <circle cx="50" cy="50" r="44" stroke="currentColor" stroke-width="4" fill="none" class="text-dark-border" />
+              <circle id="timer-progress-circle" cx="50" cy="50" r="44" stroke="currentColor" stroke-width="4.5" fill="none" stroke-dasharray="276.46" stroke-dashoffset="0" stroke-linecap="round" class="text-brand-500 transition-all duration-1000 ease-linear" />
+            </svg>
+            <div class="absolute text-center flex flex-col items-center">
+              <span id="timer-display" class="font-mono text-5xl sm:text-6xl font-bold tracking-tight text-white drop-shadow-md">25:00</span>
+              <span id="timer-mode-label" class="text-xs uppercase tracking-widest text-brand-400 font-semibold mt-2">專注時間</span>
+            </div>
+          </div>
+
+          <!-- 計時操作：開始／暫停呼叫 toggleTimer()，其餘按鈕重置或跳過目前階段。 -->
+          <div class="flex items-center space-x-4 mt-8 z-10">
+            <button id="timer-start-btn" onclick="toggleTimer()" class="w-36 py-3.5 rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white font-semibold shadow-lg shadow-brand-500/25 hover:opacity-95 active:scale-95 transition-all text-base flex items-center justify-center space-x-2">
+              <i id="timer-icon" class="fa-solid fa-play text-sm"></i>
+              <span id="timer-btn-text">開始</span>
+            </button>
+            <button onclick="resetTimer()" class="p-3.5 rounded-2xl bg-dark-bg border border-dark-border text-gray-400 hover:text-white active:scale-95 transition-all" title="重置計時"><i class="fa-solid fa-rotate-left"></i></button>
+            <button onclick="skipTimer()" class="p-3.5 rounded-2xl bg-dark-bg border border-dark-border text-gray-400 hover:text-white active:scale-95 transition-all" title="跳過階段"><i class="fa-solid fa-forward-step"></i></button>
+          </div>
+
+          <!-- 各階段時長欄位；change 事件目前呼叫空的 updateCustomDurations()。 -->
+          <div class="mt-8 pt-6 border-t border-dark-border/60 w-full flex items-center justify-between text-xs text-gray-400 z-10">
+            <span>自訂時長 (分鐘):</span>
+            <div class="flex items-center space-x-2">
+              <input type="number" id="custom-focus" value="25" min="1" max="120" class="w-12 bg-dark-bg border border-dark-border rounded px-1.5 py-0.5 text-center text-white text-xs focus:border-brand-500 outline-none" onchange="updateCustomDurations()">
+              <span>/</span>
+              <input type="number" id="custom-short" value="5" min="1" max="60" class="w-12 bg-dark-bg border border-dark-border rounded px-1.5 py-0.5 text-center text-white text-xs focus:border-brand-500 outline-none" onchange="updateCustomDurations()">
+              <span>/</span>
+              <input type="number" id="custom-long" value="15" min="1" max="60" class="w-12 bg-dark-bg border border-dark-border rounded px-1.5 py-0.5 text-center text-white text-xs focus:border-brand-500 outline-none" onchange="updateCustomDurations()">
+            </div>
+          </div>
+        </div>
+
+        <!-- 當前專注目標：顯示選取的任務，並連結至任務清單挑選。 -->
+        <div class="lg:col-span-5 space-y-6">
+          <div class="bg-dark-card border border-dark-border rounded-3xl p-6 shadow-xl relative">
+            <div class="flex items-center justify-between mb-4">
+              <span class="text-xs uppercase tracking-wider font-semibold text-brand-400 flex items-center">
+                <i class="fa-solid fa-bullseye text-rose-500 mr-2"></i> 當前目標任務
+              </span>
+              <button onclick="switchTab('tasks')" class="text-xs text-gray-400 hover:text-brand-400 transition-all flex items-center">
+                <span>選擇任務</span> <i class="fa-solid fa-chevron-right ml-1 text-[10px]"></i>
+              </button>
+            </div>
+            <div id="active-task-container" class="p-4 rounded-2xl bg-dark-bg/60 border border-dark-border/80 min-h-[100px] flex flex-col justify-center">
+              <div class="text-center text-gray-500 text-sm py-2"><p>尚未選擇進行中的任務。</p></div>
+            </div>
+            <div class="mt-4 flex items-center justify-between text-xs text-gray-400 bg-dark-bg px-3 py-2 rounded-xl">
+              <span>目標任務完成進度:</span>
+              <div id="target-pomodoro-counter" class="font-mono text-white flex items-center space-x-1">
+                <span>0</span> / <span>0</span> <span class="text-rose-500 ml-1">🍅</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 頁面 2：任務管理器，可依分類／完成狀態篩選並新增、編輯或管理任務。 -->
+    <section id="view-tasks" class="hidden space-y-6 animate-fadeIn">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-dark-card border border-dark-border rounded-2xl p-4 shadow-lg">
+        <div class="flex flex-wrap items-center gap-2 sm:gap-3 flex-1">
+          <select id="task-category-filter" onchange="renderTasks()" class="bg-dark-bg border border-dark-border rounded-xl px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-brand-500">
+            <option value="all">所有分類</option>
+            <option value="Study">📚 課業學習</option>
+            <option value="Work">💼 工作專案</option>
+            <option value="Life">🌿 個人生活</option>
+          </select>
+          <select id="task-completion-filter" onchange="renderTasks()" class="bg-dark-bg border border-dark-border rounded-xl px-3 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-brand-500">
+            <option value="all">全部任務</option>
+            <option value="pending">待辦任務</option>
+            <option value="completed">已完成</option>
+          </select>
+        </div>
+
+        <div class="flex items-center space-x-3">
+          <button onclick="openAddTaskModal()" class="px-4 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white font-medium text-xs shadow-lg flex items-center space-x-1.5"><i class="fa-solid fa-plus text-xs"></i><span>新增任務</span></button>
+        </div>
+      </div>
+
+      <div id="tasks-list-container" class="space-y-3"></div>
+    </section>
+
+    <!-- 頁面 3：統計功能目前停用，因此只顯示尚未記錄數據的提示。 -->
+    <section id="view-analytics" class="hidden animate-fadeIn">
+      <div class="rounded-3xl border border-dark-border bg-dark-card p-10 text-center shadow-xl">
+        <i class="fa-solid fa-chart-pie text-3xl text-brand-400"></i>
+        <h2 class="mt-4 text-lg font-bold text-gray-200">目前尚未啟用數據紀錄</h2>
+        <p class="mt-2 text-sm text-gray-400">在統計功能準備完成前，StudyFlow 不會記錄專注時數或顯示示範數據。</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- 全螢幕沉浸模式：提供放大的計時器與當前任務，不另建立計時器。 -->
+  <div id="focus-overlay" class="hidden fixed inset-0 z-50 bg-dark-bg flex flex-col items-center justify-between p-8 sm:p-12 transition-all">
+    <div class="w-full max-w-4xl flex items-center justify-between">
+      <span class="text-brand-400 font-bold text-lg"><i class="fa-solid fa-graduation-cap mr-2"></i>StudyFlow 沉浸專注</span>
+      <button onclick="exitFocusOverlay()" class="px-4 py-2 rounded-xl bg-dark-card border border-dark-border text-gray-300 hover:text-white text-xs font-semibold">退出專注模式</button>
+    </div>
+    <div class="flex flex-col items-center justify-center my-auto text-center">
+      <div id="overlay-task-title" class="px-4 py-1.5 rounded-full bg-brand-500/10 border border-brand-500/30 text-brand-300 text-sm mb-6">尚未選擇進行中的任務</div>
+      <div id="overlay-timer-display" class="font-mono text-7xl sm:text-9xl font-extrabold text-white tracking-tight">25:00</div>
+      <div class="flex items-center space-x-6 pt-8">
+        <button onclick="toggleTimer()" class="w-40 py-4 rounded-2xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white font-bold text-lg shadow-xl flex items-center justify-center space-x-2"><i class="fa-solid fa-play"></i><span>開始/暫停</span></button>
+        <button onclick="resetTimer()" class="p-4 rounded-2xl bg-dark-card border border-dark-border text-gray-400 hover:text-white text-lg"><i class="fa-solid fa-rotate-left"></i></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新增／編輯任務視窗：表單送出時呼叫 saveTask()，子任務先暫存在前端。 -->
+  <div id="task-modal" class="hidden fixed inset-0 z-50 glass-effect flex items-center justify-center p-4">
+    <div class="bg-dark-card border border-dark-border rounded-3xl w-full max-w-md p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-dark-border pb-3">
+        <h3 id="modal-title" class="text-base font-bold text-white">新增任務</h3>
+        <button onclick="closeTaskModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+      <form id="task-form" onsubmit="saveTask(event)" class="space-y-4">
+        <input type="hidden" id="task-id">
+        <div>
+          <label class="block text-xs font-semibold text-gray-300 mb-1">任務名稱 *</label>
+          <input type="text" id="form-task-title" required placeholder="例如：讀完離散數學第三章" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">分類</label>
+            <select id="form-task-category" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-xs text-gray-200">
+              <option value="Study">📚 課業學習</option>
+              <option value="Work">💼 工作專案</option>
+              <option value="Life">🌿 個人生活</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-gray-300 mb-1">預估番茄鐘 🍅</label>
+            <input type="number" id="form-task-est-pomo" min="1" value="2" class="w-full bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-xs text-white">
+          </div>
+        </div>
+        <div class="space-y-2 border-t border-dark-border pt-3">
+          <label for="new-subtask-title" class="block text-xs font-semibold text-gray-300">子任務清單</label>
+          <div class="flex gap-2">
+            <input id="new-subtask-title" type="text" maxlength="300" placeholder="輸入子任務內容" class="min-w-0 flex-1 bg-dark-bg border border-dark-border rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500">
+            <button type="button" onclick="addSubtask()" class="rounded-xl border border-dark-border px-3 py-2 text-xs text-gray-300 hover:border-brand-500/50 hover:text-white">加入</button>
+          </div>
+          <div id="task-subtask-list" class="max-h-32 space-y-1 overflow-y-auto"></div>
+        </div>
+        <div class="flex items-center justify-end space-x-3 pt-3 border-t border-dark-border">
+          <button type="button" onclick="closeTaskModal()" class="px-4 py-2 rounded-xl bg-dark-bg text-gray-400 text-xs">取消</button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 text-white font-medium text-xs shadow-lg">儲存任務</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 前端主要邏輯：管理計時器、目前頁面狀態、任務畫面與任務 API。 -->
+  <script>
+    // 舊版任務資料的 Local Storage 鍵名；只在登入後執行一次匯入。
+    const STORAGE_KEY_TASKS = 'studyflow_tasks_v1';
+    const TASK_MIGRATION_KEY = 'studyflow_tasks_migrated_v1';
+    // 記錄目前登入者的 ID；任務資料本身由伺服器依登入 Cookie 隔離。
+    let currentUserId = null;
+
+    // 前端目前狀態：計時器和任務畫面使用；不會把計時狀態持久化到資料庫。
+    let appState = {
+      activeTab: 'timer',
+      activeTaskId: null,
+      timerMode: 'focus',
+      timerRunning: false,
+      timerSeconds: 25 * 60,
+      timerTotalDuration: 25 * 60,
+      timerInterval: null,
+      customDurations: { focus: 25, shortBreak: 5, longBreak: 15 },
+      tasks: []
+    };
+    // 新增／編輯視窗中尚未送出儲存的子任務暫存清單。
+    let tempModalSubtasks = [];
+
+    // HTML 載入完成後，先畫出初始任務、計時器文字與目前目標任務。
+    document.addEventListener('DOMContentLoaded', () => {
+      renderTasks();
+      updateTimerDisplay();
+      updateTargetTaskUI();
+    });
+
+    // 將外部或使用者文字轉成安全的 HTML 文字，避免插入標籤造成 HTML 注入。
+    function escapeHTML(value = '') {
+      return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    // 依尚未完成的任務數量更新導覽列上的待辦數字。
+    function updatePendingCount() {
+      const badge = document.getElementById('pending-count-badge');
+      if (badge) {
+        badge.textContent = String(
+          appState.tasks.filter(task => !task.completed && task.status !== 'done').length
+        );
+      }
+    }
+
+    // 切換番茄鐘、任務清單或數據分析頁面；進入任務頁時重新繪製清單。
+    function switchTab(tabName) {
+      document.getElementById('view-timer').classList.add('hidden');
+      document.getElementById('view-tasks').classList.add('hidden');
+      document.getElementById('view-analytics').classList.add('hidden');
+      document.getElementById(`view-${tabName}`).classList.remove('hidden');
+
+      document.querySelectorAll('.nav-tab').forEach(b => {
+        b.classList.remove('bg-brand-600', 'text-white', 'shadow-md');
+        b.classList.add('text-gray-400');
+      });
+      document.getElementById(`tab-${tabName}-btn`).classList.add('bg-brand-600', 'text-white', 'shadow-md');
+      
+      if (tabName === 'tasks') renderTasks();
+    }
+
+    // 切換專注／休息階段，停止舊倒數並重設新階段的倒數時間。
+    function setTimerMode(mode) {
+      appState.timerMode = mode;
+      if (appState.timerRunning) toggleTimer();
+      const mins = appState.customDurations[mode] || 25;
+      appState.timerSeconds = mins * 60;
+      appState.timerTotalDuration = mins * 60;
+      updateTimerDisplay();
+    }
+
+    // 開始或暫停倒數；開始時每秒更新畫面，歸零時處理階段完成。
+    function toggleTimer() {
+      appState.timerRunning = !appState.timerRunning;
+      const btnText = document.getElementById('timer-btn-text');
+      const timerIcon = document.getElementById('timer-icon');
+
+      if (appState.timerRunning) {
+        if (btnText) btnText.textContent = '暫停';
+        if (timerIcon) timerIcon.className = 'fa-solid fa-pause text-sm';
+        appState.timerInterval = setInterval(() => {
+          if (appState.timerSeconds > 0) {
+            appState.timerSeconds--;
+            updateTimerDisplay();
+          } else {
+            handleTimerCompletion();
+          }
+        }, 1000);
+      } else {
+        if (btnText) btnText.textContent = '開始';
+        if (timerIcon) timerIcon.className = 'fa-solid fa-play text-sm';
+        clearInterval(appState.timerInterval);
+      }
+    }
+
+    // 停止倒數並將目前階段的時間重設為完整時長。
+    function resetTimer() {
+      if (appState.timerRunning) toggleTimer();
+      appState.timerSeconds = appState.customDurations[appState.timerMode] * 60;
+      updateTimerDisplay();
+    }
+
+    // 詢問使用者是否略過目前階段；確認後重設該階段計時器。
+    function skipTimer() { if (confirm("確定跳過此階段？")) resetTimer(); }
+
+    // 更新頁面與全螢幕模式中的時間、瀏覽器分頁標題和 SVG 圓環進度。
+    function updateTimerDisplay() {
+      const minutes = Math.floor(appState.timerSeconds / 60);
+      const seconds = appState.timerSeconds % 60;
+      const formatted = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      
+      document.getElementById('timer-display').textContent = formatted;
+      document.getElementById('overlay-timer-display').textContent = formatted;
+      const modeLabels = {
+        focus: '專注',
+        shortBreak: '短休息',
+        longBreak: '長休息'
+      };
+      document.title = `${formatted} ${modeLabels[appState.timerMode]} | StudyFlow`;
+
+      const circle = document.getElementById('timer-progress-circle');
+      if (circle) {
+        const fraction = appState.timerSeconds / appState.timerTotalDuration;
+        circle.style.strokeDashoffset = (2 * Math.PI * 44) * (1 - fraction);
+      }
+    }
+
+    // 倒數歸零時停止計時、通知使用者，並切換到下一個階段。
+    function handleTimerCompletion() {
+      toggleTimer();
+      if (appState.timerMode === 'focus') {
+        alert("🎉 專注時段完成！");
+        setTimerMode('shortBreak');
+      } else {
+        alert("休息結束！準備開始專注囉。");
+        setTimerMode('focus');
+      }
+    }
+
+    // 套用分類和完成狀態篩選，並將任務資料繪製成清單及操作按鈕。
+    function renderTasks() {
+      updatePendingCount();
+      const container = document.getElementById('tasks-list-container');
+      if (!container) return;
+      const categoryFilterElement = document.getElementById('task-category-filter');
+      const categoryFilter = categoryFilterElement ? categoryFilterElement.value : 'all';
+      const completionFilter = document.getElementById('task-completion-filter').value;
+      const filteredTasks = appState.tasks.filter(task =>
+        (categoryFilter === 'all' || task.category === categoryFilter) &&
+        (completionFilter === 'all' ||
+          (completionFilter === 'completed' ? task.completed : !task.completed))
+      );
+
+      if (filteredTasks.length === 0) {
+        const message = appState.tasks.length === 0
+          ? '尚無任務，按右上角新增。'
+          : completionFilter === 'completed'
+            ? '目前沒有已完成的任務。'
+            : completionFilter === 'pending'
+              ? '目前沒有待辦任務。'
+              : '沒有符合篩選條件的任務。';
+        container.innerHTML = `<div class="text-center py-8 text-gray-500 text-xs">${message}</div>`;
+        return;
+      }
+
+      const categoryLabels = { Study: '📚 課業學習', Work: '💼 工作專案', Life: '🌿 個人生活' };
+      container.innerHTML = filteredTasks.map(t => `
+        <div class="bg-dark-card border border-dark-border p-4 rounded-2xl flex items-center justify-between ${t.completed ? 'opacity-70' : ''}">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <h4 class="text-sm font-bold text-white ${t.completed ? 'line-through' : ''}">${escapeHTML(t.title)}</h4>
+              ${t.completed ? '<span class="rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] text-emerald-300">已完成</span>' : ''}
+              <span class="text-[10px] px-2 py-0.5 rounded bg-dark-bg border border-dark-border text-gray-300">${categoryLabels[t.category] || '未分類'}</span>
+            </div>
+            <span class="text-[10px] text-gray-400">預估番茄: ${t.estimatedPomodoros || 1} 🍅</span>
+            ${t.subtasks?.length ? `
+              <div class="mt-3 max-w-2xl space-y-1 border-t border-dark-border pt-2">
+                <p class="mb-1 text-[10px] text-gray-400">子任務 ${t.subtasks.filter(item => item.completed).length}/${t.subtasks.length}</p>
+                ${t.subtasks.map(subtask => `
+                  <button type="button" onclick="toggleSubtask('${t.id}', '${subtask.id}')" class="flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-xs hover:bg-dark-hover">
+                    <i class="${subtask.completed ? 'fa-solid fa-circle-check text-emerald-400' : 'fa-regular fa-circle text-gray-500'}"></i>
+                    <span class="${subtask.completed ? 'text-gray-500 line-through' : 'text-gray-300'}">${escapeHTML(subtask.title)}</span>
+                  </button>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+          <div class="ml-3 flex shrink-0 items-center gap-2">
+            ${t.completed
+              ? `<button onclick="setTaskCompletion('${t.id}', false)" class="px-3 py-1 rounded-xl border border-emerald-500/40 text-emerald-300 text-xs hover:bg-emerald-500/10">重新開啟</button>`
+              : `<button onclick="setTaskCompletion('${t.id}', true)" class="px-3 py-1 rounded-xl bg-emerald-600 text-white text-xs hover:bg-emerald-500">完成</button>
+                 <button onclick="setFocusTarget('${t.id}')" class="px-3 py-1 rounded-xl bg-brand-600 text-white text-xs">專注</button>`}
+            <button onclick="openEditTaskModal('${t.id}')" class="px-3 py-1 rounded-xl border border-dark-border text-gray-300 text-xs hover:text-white">編輯</button>
+            <button onclick="deleteTask('${t.id}')" class="px-3 py-1 rounded-xl border border-rose-500/40 text-rose-300 text-xs hover:bg-rose-500/10">刪除</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 呼叫伺服器更新任務完成狀態，再同步前端資料與清單畫面。
+    async function setTaskCompletion(taskId, completed) {
+      try {
+        const response = await fetch(`/api/tasks/${encodeURIComponent(taskId)}/completion`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ completed })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || '更新任務狀態失敗。');
+        const index = appState.tasks.findIndex(task => task.id === taskId);
+        if (index !== -1) appState.tasks[index] = data.task;
+        if (completed && appState.activeTaskId === taskId) {
+          appState.activeTaskId = null;
+        }
+        renderTasks();
+        updateTargetTaskUI();
+      } catch (error) {
+        alert(error.message || '更新任務狀態失敗，請檢查網路連線。');
+      }
+    }
+
+    // 呼叫伺服器切換子任務完成狀態，並重新繪製任務畫面。
+    async function toggleSubtask(taskId, subtaskId) {
+      try {
+        const response = await fetch(
+          `/api/tasks/${encodeURIComponent(taskId)}/subtasks/${encodeURIComponent(subtaskId)}`,
+          { method: 'PATCH' }
+        );
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || '更新子任務失敗。');
+        const index = appState.tasks.findIndex(task => task.id === taskId);
+        if (index !== -1) appState.tasks[index] = data.task;
+        renderTasks();
+        updateTargetTaskUI();
+      } catch (error) {
+        alert(error.message || '更新子任務失敗，請檢查網路連線。');
+      }
+    }
+
+    // 確認刪除後呼叫伺服器刪除任務，並清除相關的前端目標狀態。
+    async function deleteTask(id) {
+      const task = appState.tasks.find(item => item.id === id);
+      if (!task || !confirm(`確定刪除任務「${task.title}」？此操作無法復原。`)) return;
+
+      try {
+        const response = await fetch(`/api/tasks/${encodeURIComponent(id)}`, {
+          method: 'DELETE'
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.detail || '刪除任務失敗，請稍後再試。');
+        }
+        appState.tasks = appState.tasks.filter(item => item.id !== id);
+        if (appState.activeTaskId === id) appState.activeTaskId = null;
+        renderTasks();
+        updateTargetTaskUI();
+      } catch (error) {
+        alert(error.message || '刪除任務失敗，請檢查網路連線。');
+      }
+    }
+
+    // 將指定任務設為目前專注目標，更新顯示並切換回番茄鐘頁。
+    function setFocusTarget(id) {
+      appState.activeTaskId = id;
+      updateTargetTaskUI();
+      switchTab('timer');
+    }
+
+    // 在番茄鐘卡片與全螢幕畫面顯示目前選取的任務名稱。
+    function updateTargetTaskUI() {
+      const task = appState.tasks.find(t => t.id === appState.activeTaskId);
+      const container = document.getElementById('active-task-container');
+      const titleOverlay = document.getElementById('overlay-task-title');
+
+      if (task) {
+        container.innerHTML = `<h4 class="text-sm font-bold text-white">${task.title}</h4>`;
+        if (titleOverlay) titleOverlay.textContent = task.title;
+      } else {
+        container.innerHTML = `<p class="text-gray-500 text-sm text-center">尚未選擇專注目標。</p>`;
+        if (titleOverlay) titleOverlay.textContent = "尚未選擇進行中的任務";
+      }
+    }
+
+    // 清空任務表單和子任務暫存資料，打開新增任務視窗。
+    function openAddTaskModal() {
+      document.getElementById('task-form').reset();
+      document.getElementById('task-id').value = '';
+      tempModalSubtasks = [];
+      renderModalSubtasks();
+      document.getElementById('task-modal').classList.remove('hidden');
+    }
+
+    // 將既有任務資料填入表單和子任務暫存清單，打開編輯視窗。
+    function openEditTaskModal(id) {
+      const task = appState.tasks.find(item => item.id === id);
+      if (!task) return;
+      document.getElementById('task-id').value = task.id;
+      document.getElementById('form-task-title').value = task.title;
+      document.getElementById('form-task-category').value = task.category;
+      document.getElementById('form-task-est-pomo').value = task.estimatedPomodoros || 1;
+      tempModalSubtasks = (task.subtasks || []).map(subtask => ({ ...subtask }));
+      renderModalSubtasks();
+      document.getElementById('task-modal').classList.remove('hidden');
+    }
+
+    // 關閉新增／編輯任務視窗。
+    function closeTaskModal() { document.getElementById('task-modal').classList.add('hidden'); }
+
+    // 驗證子任務名稱後加入目前表單的暫存清單，更新清單畫面。
+    function addSubtask() {
+      const input = document.getElementById('new-subtask-title');
+      const title = input.value.trim();
+      if (!title) {
+        input.focus();
+        return;
+      }
+      tempModalSubtasks.push({ title, completed: false });
+      input.value = '';
+      renderModalSubtasks();
+      input.focus();
+    }
+
+    // 從表單暫存清單移除指定位置的子任務。
+    function removeSubtask(index) {
+      tempModalSubtasks.splice(index, 1);
+      renderModalSubtasks();
+    }
+
+    // 將表單尚未儲存的子任務繪製在任務視窗中。
+    function renderModalSubtasks() {
+      const container = document.getElementById('task-subtask-list');
+      container.innerHTML = tempModalSubtasks.length
+        ? tempModalSubtasks.map((subtask, index) => `
+          <div class="flex items-center justify-between rounded-lg bg-dark-bg px-3 py-2">
+            <span class="text-xs text-gray-300">${index + 1}. ${escapeHTML(subtask.title)}</span>
+            <button type="button" onclick="removeSubtask(${index})" aria-label="移除子任務" class="ml-2 text-gray-500 hover:text-rose-400">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+        `).join('')
+        : '<p class="text-[11px] italic text-gray-500">尚未新增子任務</p>';
+    }
+
+    // 驗證任務表單，新增時 POST、編輯時 PUT，成功後更新前端任務清單。
+    async function saveTask(e) {
+      e.preventDefault();
+      const title = document.getElementById('form-task-title').value.trim();
+      const taskId = document.getElementById('task-id').value;
+      const category = document.getElementById('form-task-category').value;
+      const estimatedPomodoros = parseInt(document.getElementById('form-task-est-pomo').value) || 1;
+      const submitButton = document.querySelector('#task-form button[type="submit"]');
+      submitButton.disabled = true;
+      try {
+        const response = await fetch(taskId ? `/api/tasks/${encodeURIComponent(taskId)}` : '/api/tasks', {
+          method: taskId ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title,
+            category,
+            estimated_pomodoros: estimatedPomodoros,
+            subtasks: tempModalSubtasks,
+            completed: taskId
+              ? Boolean(appState.tasks.find(task => task.id === taskId)?.completed)
+              : false
+          })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || '新增任務失敗，請稍後再試。');
+        if (taskId) {
+          const index = appState.tasks.findIndex(task => task.id === taskId);
+          if (index !== -1) appState.tasks[index] = data.task;
+        } else {
+          appState.tasks.unshift(data.task);
+        }
+        closeTaskModal();
+        renderTasks();
+        updateTargetTaskUI();
+        document.getElementById('task-form').reset();
+      } catch (error) {
+        alert(error.message || '新增任務失敗，請檢查網路連線。');
+      } finally {
+        submitButton.disabled = false;
+      }
+    }
+
+    // 顯示／隱藏沉浸專注模式的全螢幕遮罩。
+    function enterFocusOverlay() { document.getElementById('focus-overlay').classList.remove('hidden'); }
+    function exitFocusOverlay() { document.getElementById('focus-overlay').classList.add('hidden'); }
+
+    // 目前僅顯示提示文字，尚未向瀏覽器要求桌面通知權限。
+    function requestNotificationPermission() { alert("通知功能已就緒！"); }
+
+    // 預留自訂時長變更處理；目前尚未實作欄位與計時狀態的同步。
+    function updateCustomDurations() {}
+  </script>
+  <!-- 登入邏輯：載入 Google 登入元件、驗證工作階段、匯入舊任務並處理登出。 -->
+  <script>
+    (() => {
+      const overlay = document.getElementById('auth-overlay');
+      const message = document.getElementById('auth-message');
+      const googleButton = document.getElementById('google-button');
+      const userName = document.getElementById('auth-user-name');
+      const logoutButton = document.getElementById('logout-button');
+
+      // 允許在子任務輸入框按 Enter，執行與「加入」按鈕相同的新增操作。
+      document.getElementById('new-subtask-title').addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          addSubtask();
+        }
+      });
+      let clientId = '';
+      let googleInitialized = false;
+
+      // 更新登入提示文字，並依狀態套用一般或錯誤顏色。
+      function showMessage(text, isError = false) {
+        message.textContent = text;
+        message.classList.toggle('text-red-400', isError);
+        message.classList.toggle('text-gray-300', !isError);
+      }
+
+      // 將伺服器 JSON 回應轉成資料；非成功狀態時以伺服器錯誤訊息回報。
+      async function readResponse(response) {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.detail || '請求失敗，請稍後再試。');
+        return data;
+      }
+
+      // 接收登入使用者資料；必要時先匯入舊版瀏覽器任務，再載入伺服器任務。
+      async function showSignedIn(user) {
+        currentUserId = String(user.id);
+        try {
+          if (!localStorage.getItem(TASK_MIGRATION_KEY)) {
+            const savedTasks = localStorage.getItem(STORAGE_KEY_TASKS);
+            let legacyTasks = [];
+            if (savedTasks) {
+              legacyTasks = JSON.parse(savedTasks);
+              if (!Array.isArray(legacyTasks)) {
+                throw new Error('舊任務資料格式錯誤，無法安全匯入。');
+              }
+            }
+
+            const importResponse = await fetch('/api/tasks/import', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tasks: legacyTasks.map(task => ({
+                  title: String(task.title || '').trim(),
+                  category: ['Study', 'Work', 'Life'].includes(task.category)
+                    ? task.category
+                    : 'Study',
+                  estimated_pomodoros: Math.max(
+                    1,
+                    Math.min(100, Number(task.estimatedPomodoros) || 1)
+                  ),
+                  subtasks: Array.isArray(task.subtasks)
+                    ? task.subtasks.map(subtask => ({
+                        title: String(subtask.title || '').trim(),
+                        completed: Boolean(subtask.completed)
+                      })).filter(subtask => subtask.title)
+                    : [],
+                  completed: Boolean(task.completed || task.status === 'done')
+                })).filter(task => task.title)
+              })
+            });
+            await readResponse(importResponse);
+            localStorage.setItem(TASK_MIGRATION_KEY, '1');
+          }
+
+          const taskData = await readResponse(await fetch('/api/tasks'));
+          appState.tasks = taskData.tasks;
+          renderTasks();
+          updateTargetTaskUI();
+          userName.textContent = user.name || user.email;
+          overlay.classList.add('hidden');
+        } catch (error) {
+          currentUserId = null;
+          throw error;
+        }
+      }
+
+      // 動態載入 Google Identity Services 用戶端程式庫。
+      function loadGoogleIdentityServices() {
+        if (window.google?.accounts?.id) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://accounts.google.com/gsi/client';
+          script.async = true;
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('無法載入 Google 登入服務，請檢查網路連線。'));
+          document.head.appendChild(script);
+        });
+      }
+
+      // 初始化 Google 登入 callback 並繪製登入按鈕；登入後將 ID Token 傳給後端驗證。
+      async function renderGoogleButton() {
+        await loadGoogleIdentityServices();
+        if (!googleInitialized) {
+          google.accounts.id.initialize({
+            client_id: clientId,
+            auto_select: false,
+            callback: async (credentialResponse) => {
+              googleButton.replaceChildren();
+              showMessage('正在驗證 Google 帳戶…');
+              try {
+                const data = await readResponse(await fetch('/api/auth/google', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ token: credentialResponse.credential })
+                }));
+                await showSignedIn(data.user);
+              } catch (error) {
+                showMessage(error.message, true);
+                await renderGoogleButton();
+              }
+            }
+          });
+          googleInitialized = true;
+        }
+        google.accounts.id.renderButton(googleButton, {
+          type: 'standard',
+          theme: 'outline',
+          size: 'large',
+          text: 'signin_with',
+          shape: 'rectangular',
+          width: 280
+        });
+      }
+
+      // 讀取 OAuth 設定與目前登入狀態；未登入時顯示 Google 登入按鈕。
+      async function initializeAuth() {
+        try {
+          const config = await readResponse(await fetch('/api/auth/config'));
+          if (!config.configured) {
+            showMessage('伺服器尚未設定 GOOGLE_CLIENT_ID，請依 README 設定。', true);
+            return;
+          }
+          clientId = config.client_id;
+
+          const sessionResponse = await fetch('/api/auth/me');
+          if (sessionResponse.ok) {
+            const data = await sessionResponse.json();
+            await showSignedIn(data.user);
+            return;
+          }
+          if (sessionResponse.status !== 401) {
+            throw new Error('無法確認登入狀態，請重新整理頁面。');
+          }
+
+          showMessage('請使用 Google 帳戶登入以繼續。');
+          await renderGoogleButton();
+        } catch (error) {
+          showMessage(error.message || '初始化登入失敗，請稍後再試。', true);
+        }
+      }
+
+      // 登出按鈕事件：通知後端結束工作階段，清空前端資料並返回登入畫面。
+      logoutButton.addEventListener('click', async () => {
+        logoutButton.disabled = true;
+        try {
+          await readResponse(await fetch('/api/auth/logout', { method: 'POST' }));
+          currentUserId = null;
+          appState.tasks = [];
+          appState.activeTaskId = null;
+          userName.textContent = '';
+          renderTasks();
+          updateTargetTaskUI();
+          overlay.classList.remove('hidden');
+          googleButton.replaceChildren();
+          showMessage('已登出，請重新登入。');
+          await renderGoogleButton();
+        } catch (error) {
+          showMessage(error.message, true);
+        } finally {
+          logoutButton.disabled = false;
+        }
+      });
+
+      initializeAuth();
+    })();
+  </script>
+</body>
+</html>
